@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ThemeProvider, CssBaseline } from '@mui/material';
-import theme from './theme';
+import theme from './styles/theme';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -13,6 +13,8 @@ import ClassList from './pages/ClassList';
 import ClassForm from './pages/ClassForm';
 import StudentList from './pages/StudentList';
 import StudentForm from './pages/StudentForm';
+import StudentManagement from './pages/StudentManagement';
+import './styles/App.css';
 
 const App: React.FC = () => {
   return (
@@ -33,6 +35,7 @@ const App: React.FC = () => {
             <Route path="students" element={<StudentList />} />
             <Route path="students/new" element={<StudentForm />} />
             <Route path="students/:id/edit" element={<StudentForm />} />
+            <Route path="students/:id/management" element={<StudentManagement />} />
           </Route>
         </Routes>
       </Router>

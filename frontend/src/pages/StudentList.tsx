@@ -161,28 +161,32 @@ const StudentList: React.FC = () => {
               <TableRow key={student.id}>
                 <TableCell>{student.id}</TableCell>
                 <TableCell>{student.name}</TableCell>
-                <TableCell>
-                  {student.subject === 'CHEMISTRY' ? '화학' : 
-                   student.subject === 'BIOLOGY' ? '생명' : '지학'}
-                </TableCell>
+                <TableCell>{student.subject}</TableCell>
                 <TableCell>{student.className}</TableCell>
                 <TableCell>{student.parentPhone}</TableCell>
-                <TableCell>{student.studentPhone || '-'}</TableCell>
+                <TableCell>{student.studentPhone}</TableCell>
                 <TableCell>
-                  <IconButton
-                    color="primary"
-                    onClick={() => handleEdit(student.id)}
+                  <Button
                     size="small"
+                    onClick={() => navigate(`/students/${student.id}/management`)}
+                    sx={{ mr: 1 }}
                   >
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton
+                    관리
+                  </Button>
+                  <Button
+                    size="small"
+                    onClick={() => handleEdit(student.id)}
+                    sx={{ mr: 1 }}
+                  >
+                    수정
+                  </Button>
+                  <Button
+                    size="small"
                     color="error"
                     onClick={() => handleDelete(student.id)}
-                    size="small"
                   >
-                    <DeleteIcon />
-                  </IconButton>
+                    삭제
+                  </Button>
                 </TableCell>
               </TableRow>
             ))}
