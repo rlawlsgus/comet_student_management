@@ -13,13 +13,14 @@ import {
   Alert,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import { userAPI } from '../services/api';
 
 interface RegisterFormData {
   username: string;
   password: string;
   confirmPassword: string;
   name: string;
-  role: 'TEACHER' | 'ASSISTANT';
+  role: 'ADMIN' | 'TEACHER' | 'ASSISTANT';
   subject: 'CHEMISTRY' | 'BIOLOGY' | 'EARTH_SCIENCE';
 }
 
@@ -34,6 +35,7 @@ const Register: React.FC = () => {
     subject: 'CHEMISTRY',
   });
   const [error, setError] = useState<string>('');
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | { name?: string; value: unknown }> | any) => {
     const { name, value } = e.target;
@@ -46,19 +48,24 @@ const Register: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
 
     if (formData.password !== formData.confirmPassword) {
       setError('비밀번호가 일치하지 않습니다.');
+      setLoading(false);
       return;
     }
 
     try {
-      // TODO: API 연동
-      // const response = await registerUser(formData);
-      console.log('회원가입 데이터:', formData);
+      const { confirmPassword, ...userData } = formData;
+      const response = await userAPI.createUser(userData);
+      console.log('회원가입 성공:', response);
       navigate('/users'); // 회원 목록 페이지로 이동
-    } catch (err) {
-      setError('회원가입 중 오류가 발생했습니다.');
+    } catch (err: any) {
+      console.error('회원가입 실패:', err);
+      setError(err.message || '회원가입 중 오류가 발생했습니다.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -84,6 +91,7 @@ const Register: React.FC = () => {
             onChange={handleChange}
             margin="normal"
             required
+            disabled={loading}
           />
           
           <TextField
@@ -95,6 +103,7 @@ const Register: React.FC = () => {
             onChange={handleChange}
             margin="normal"
             required
+            disabled={loading}
           />
           
           <TextField
@@ -106,6 +115,7 @@ const Register: React.FC = () => {
             onChange={handleChange}
             margin="normal"
             required
+            disabled={loading}
           />
           
           <TextField
@@ -116,6 +126,7 @@ const Register: React.FC = () => {
             onChange={handleChange}
             margin="normal"
             required
+            disabled={loading}
           />
           
           <FormControl fullWidth margin="normal">
@@ -125,7 +136,9 @@ const Register: React.FC = () => {
               value={formData.role}
               onChange={handleChange}
               label="역할"
+              disabled={loading}
             >
+              <MenuItem value="ADMIN">관리자</MenuItem>
               <MenuItem value="TEACHER">선생님</MenuItem>
               <MenuItem value="ASSISTANT">조교</MenuItem>
             </Select>
@@ -138,6 +151,7 @@ const Register: React.FC = () => {
               value={formData.subject}
               onChange={handleChange}
               label="과목"
+              disabled={loading}
             >
               <MenuItem value="CHEMISTRY">화학</MenuItem>
               <MenuItem value="BIOLOGY">생명</MenuItem>
@@ -150,8 +164,9 @@ const Register: React.FC = () => {
             fullWidth
             variant="contained"
             sx={{ mt: 3 }}
+            disabled={loading}
           >
-            등록
+            {loading ? '등록 중...' : '등록'}
           </Button>
         </Box>
       </Paper>

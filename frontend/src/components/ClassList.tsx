@@ -1,20 +1,29 @@
 import React from 'react';
-import { Box, Typography, Button } from '@mui/material';
+import { Box, Typography, Button, CircularProgress } from '@mui/material';
 
 interface Class {
   id: number;
   name: string;
-  grade: number;
-  studentCount: number;
+  subject: string;
+  student_count: number;
 }
 
 interface ClassListProps {
   classes: Class[];
   selectedClassId?: number;
   onClassSelect: (classId: number) => void;
+  loading?: boolean;
 }
 
-const ClassList: React.FC<ClassListProps> = ({ classes, selectedClassId, onClassSelect }) => {
+const ClassList: React.FC<ClassListProps> = ({ classes, selectedClassId, onClassSelect, loading = false }) => {
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
   return (
     <Box sx={{ display: 'flex', gap: 1, overflowX: 'auto', pb: 1 }}>
       {classes.map((classItem) => (
@@ -30,10 +39,10 @@ const ClassList: React.FC<ClassListProps> = ({ classes, selectedClassId, onClass
         >
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <Typography variant="subtitle1">
-              {classItem.grade}학년 {classItem.name}반
+              {classItem.name}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              {classItem.studentCount}명
+              {classItem.student_count}명
             </Typography>
           </Box>
         </Button>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Container,
   Paper,
@@ -15,43 +15,60 @@ import {
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { classAPI } from '../services/api';
+import { formatTime } from '../utils/dateUtils';
 
 interface Class {
   id: number;
   name: string;
   subject: 'CHEMISTRY' | 'BIOLOGY' | 'EARTH_SCIENCE';
-  dayOfWeek: 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY';
-  startTime: string;
-  teacherId: number;
+  day_of_week: 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY';
+  start_time: string;
+  student_count: number;
 }
 
 const ClassList: React.FC = () => {
   const navigate = useNavigate();
-  const [classes, setClasses] = useState<Class[]>([
-    {
-      id: 1,
-      name: '화학 기초반',
-      subject: 'CHEMISTRY',
-      dayOfWeek: 'MONDAY',
-      startTime: '14:00',
-      teacherId: 1,
-    },
-    {
-      id: 2,
-      name: '생명 심화반',
-      subject: 'BIOLOGY',
-      dayOfWeek: 'WEDNESDAY',
-      startTime: '15:30',
-      teacherId: 2,
-    },
-  ]);
+  const { user } = useAuth();
+  const [classes, setClasses] = useState<Class[]>([]);
+  const [loading, setLoading] = useState(true);
+  const mountedRef = useRef(false);
+
+  useEffect(() => {
+    // 컴포넌트가 마운트되었는지 확인
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      fetchClasses();
+    }
+  }, []);
+
+  const fetchClasses = async () => {
+    try {
+      const response = await classAPI.getClasses();
+      console.log('반 목록 응답:', response); // 디버깅용
+      setClasses(response);
+    } catch (error) {
+      console.error('반 목록 조회 실패:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleEdit = (classId: number) => {
     navigate(`/classes/${classId}/edit`);
   };
 
-  const handleDelete = (classId: number) => {
-    setClasses(classes.filter(c => c.id !== classId));
+  const handleDelete = async (classId: number) => {
+    if (window.confirm('정말로 이 반을 삭제하시겠습니까?')) {
+      try {
+        await classAPI.deleteClass(classId);
+        setClasses(classes.filter(c => c.id !== classId));
+      } catch (error) {
+        console.error('반 삭제 실패:', error);
+        alert('반 삭제에 실패했습니다.');
+      }
+    }
   };
 
   const getDayOfWeek = (day: string) => {
@@ -64,8 +81,28 @@ const ClassList: React.FC = () => {
       'SATURDAY': '토요일',
       'SUNDAY': '일요일',
     };
-    return days[day as keyof typeof days];
+    return days[day as keyof typeof days] || day;
   };
+
+  const getSubjectName = (subject: string) => {
+    const subjects = {
+      'CHEMISTRY': '화학',
+      'BIOLOGY': '생명',
+      'EARTH_SCIENCE': '지학',
+    };
+    return subjects[subject as keyof typeof subjects] || subject;
+  };
+
+  // 조교는 추가/수정/삭제 권한이 없음
+  const canEdit = user?.role !== 'ASSISTANT';
+
+  if (loading) {
+    return (
+      <Container maxWidth="lg" sx={{ mt: 4 }}>
+        <Typography>로딩 중...</Typography>
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4 }}>
@@ -73,13 +110,15 @@ const ClassList: React.FC = () => {
         <Typography variant="h5" component="h1">
           반 목록
         </Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={() => navigate('/classes/new')}
-        >
-          반 추가
-        </Button>
+        {canEdit && (
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={() => navigate('/classes/new')}
+          >
+            반 추가
+          </Button>
+        )}
       </Box>
 
       <TableContainer component={Paper}>
@@ -91,7 +130,8 @@ const ClassList: React.FC = () => {
               <TableCell>과목</TableCell>
               <TableCell>요일</TableCell>
               <TableCell>시작 시간</TableCell>
-              <TableCell>관리</TableCell>
+              <TableCell>학생 수</TableCell>
+              {canEdit && <TableCell>관리</TableCell>}
             </TableRow>
           </TableHead>
           <TableBody>
@@ -99,28 +139,28 @@ const ClassList: React.FC = () => {
               <TableRow key={classItem.id}>
                 <TableCell>{classItem.id}</TableCell>
                 <TableCell>{classItem.name}</TableCell>
-                <TableCell>
-                  {classItem.subject === 'CHEMISTRY' ? '화학' : 
-                   classItem.subject === 'BIOLOGY' ? '생명' : '지학'}
-                </TableCell>
-                <TableCell>{getDayOfWeek(classItem.dayOfWeek)}</TableCell>
-                <TableCell>{classItem.startTime}</TableCell>
-                <TableCell>
-                  <IconButton
-                    color="primary"
-                    onClick={() => handleEdit(classItem.id)}
-                    size="small"
-                  >
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton
-                    color="error"
-                    onClick={() => handleDelete(classItem.id)}
-                    size="small"
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </TableCell>
+                <TableCell>{getSubjectName(classItem.subject)}</TableCell>
+                <TableCell>{getDayOfWeek(classItem.day_of_week)}</TableCell>
+                <TableCell>{formatTime(classItem.start_time)}</TableCell>
+                <TableCell>{classItem.student_count}</TableCell>
+                {canEdit && (
+                  <TableCell>
+                    <IconButton
+                      color="primary"
+                      onClick={() => handleEdit(classItem.id)}
+                      size="small"
+                    >
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton
+                      color="error"
+                      onClick={() => handleDelete(classItem.id)}
+                      size="small"
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>

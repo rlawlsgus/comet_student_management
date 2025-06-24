@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Container,
   Paper,
@@ -20,15 +20,26 @@ import {
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { studentAPI, classAPI } from '../services/api';
 
 interface Student {
   id: number;
   name: string;
-  subject: 'CHEMISTRY' | 'BIOLOGY' | 'EARTH_SCIENCE';
-  classId: number;
-  className: string;
-  parentPhone: string;
-  studentPhone?: string;
+  class_info: number;
+  class_info_name: string;
+  parent_phone: string;
+  student_phone?: string;
+  attendance_stats: {
+    total_classes: number;
+    attended_classes: number;
+    late_count: number;
+  };
+  exam_stats: {
+    average_score: number;
+    highest_score: number;
+    lowest_score: number;
+  };
 }
 
 interface Class {
@@ -39,35 +50,36 @@ interface Class {
 
 const StudentList: React.FC = () => {
   const navigate = useNavigate();
-  const [students, setStudents] = useState<Student[]>([
-    {
-      id: 1,
-      name: '김학생',
-      subject: 'CHEMISTRY',
-      classId: 1,
-      className: '화학 기초반',
-      parentPhone: '010-1234-5678',
-      studentPhone: '010-9876-5432',
-    },
-    {
-      id: 2,
-      name: '이학생',
-      subject: 'BIOLOGY',
-      classId: 2,
-      className: '생명 심화반',
-      parentPhone: '010-2345-6789',
-    },
-  ]);
-
-  const [classes] = useState<Class[]>([
-    { id: 1, name: '화학 기초반', subject: 'CHEMISTRY' },
-    { id: 2, name: '생명 심화반', subject: 'BIOLOGY' },
-  ]);
+  const { user } = useAuth();
+  const [students, setStudents] = useState<Student[]>([]);
+  const [classes, setClasses] = useState<Class[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [filters, setFilters] = useState({
     subject: '',
     classId: '',
   });
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      const [studentsResponse, classesResponse] = await Promise.all([
+        studentAPI.getStudents(),
+        classAPI.getClasses()
+      ]);
+      console.log('학생 목록 응답:', studentsResponse); // 디버깅용
+      console.log('반 목록 응답:', classesResponse); // 디버깅용
+      setStudents(studentsResponse);
+      setClasses(classesResponse);
+    } catch (error) {
+      console.error('데이터 조회 실패:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleFilterChange = (e: SelectChangeEvent) => {
     const { name, value } = e.target;
@@ -78,8 +90,11 @@ const StudentList: React.FC = () => {
   };
 
   const filteredStudents = students.filter(student => {
-    if (filters.subject && student.subject !== filters.subject) return false;
-    if (filters.classId && student.classId !== Number(filters.classId)) return false;
+    if (filters.subject) {
+      const studentClass = classes.find(c => c.id === student.class_info);
+      if (!studentClass || studentClass.subject !== filters.subject) return false;
+    }
+    if (filters.classId && student.class_info !== Number(filters.classId)) return false;
     return true;
   });
 
@@ -89,9 +104,28 @@ const StudentList: React.FC = () => {
     navigate(`/students/${studentId}/edit`);
   };
 
-  const handleDelete = (studentId: number) => {
-    setStudents(students.filter(s => s.id !== studentId));
+  const handleDelete = async (studentId: number) => {
+    if (window.confirm('정말로 이 학생을 삭제하시겠습니까?')) {
+      try {
+        await studentAPI.deleteStudent(studentId);
+        setStudents(students.filter(s => s.id !== studentId));
+      } catch (error) {
+        console.error('학생 삭제 실패:', error);
+        alert('학생 삭제에 실패했습니다.');
+      }
+    }
   };
+
+  // 조교는 추가/수정/삭제 권한이 없지만 관리 권한은 있음
+  const canEdit = user?.role !== 'ASSISTANT';
+
+  if (loading) {
+    return (
+      <Container maxWidth="lg" sx={{ mt: 4 }}>
+        <Typography>로딩 중...</Typography>
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4 }}>
@@ -99,13 +133,15 @@ const StudentList: React.FC = () => {
         <Typography variant="h5" component="h1">
           학생 목록
         </Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={() => navigate('/students/new')}
-        >
-          학생 추가
-        </Button>
+        {canEdit && (
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={() => navigate('/students/new')}
+          >
+            학생 추가
+          </Button>
+        )}
       </Box>
 
       <Paper sx={{ p: 2, mb: 3 }}>
@@ -149,10 +185,11 @@ const StudentList: React.FC = () => {
             <TableRow>
               <TableCell>ID</TableCell>
               <TableCell>이름</TableCell>
-              <TableCell>과목</TableCell>
               <TableCell>반</TableCell>
               <TableCell>부모님 전화번호</TableCell>
               <TableCell>학생 전화번호</TableCell>
+              <TableCell>출석률</TableCell>
+              <TableCell>평균 점수</TableCell>
               <TableCell>관리</TableCell>
             </TableRow>
           </TableHead>
@@ -161,10 +198,16 @@ const StudentList: React.FC = () => {
               <TableRow key={student.id}>
                 <TableCell>{student.id}</TableCell>
                 <TableCell>{student.name}</TableCell>
-                <TableCell>{student.subject}</TableCell>
-                <TableCell>{student.className}</TableCell>
-                <TableCell>{student.parentPhone}</TableCell>
-                <TableCell>{student.studentPhone}</TableCell>
+                <TableCell>{student.class_info_name}</TableCell>
+                <TableCell>{student.parent_phone}</TableCell>
+                <TableCell>{student.student_phone || '-'}</TableCell>
+                <TableCell>
+                  {student.attendance_stats.total_classes > 0 
+                    ? `${Math.round((student.attendance_stats.attended_classes / student.attendance_stats.total_classes) * 100)}%`
+                    : '0%'
+                  }
+                </TableCell>
+                <TableCell>{student.exam_stats.average_score}점</TableCell>
                 <TableCell>
                   <Button
                     size="small"
@@ -173,20 +216,24 @@ const StudentList: React.FC = () => {
                   >
                     관리
                   </Button>
-                  <Button
-                    size="small"
-                    onClick={() => handleEdit(student.id)}
-                    sx={{ mr: 1 }}
-                  >
-                    수정
-                  </Button>
-                  <Button
-                    size="small"
-                    color="error"
-                    onClick={() => handleDelete(student.id)}
-                  >
-                    삭제
-                  </Button>
+                  {canEdit && (
+                    <>
+                      <Button
+                        size="small"
+                        onClick={() => handleEdit(student.id)}
+                        sx={{ mr: 1 }}
+                      >
+                        수정
+                      </Button>
+                      <Button
+                        size="small"
+                        color="error"
+                        onClick={() => handleDelete(student.id)}
+                      >
+                        삭제
+                      </Button>
+                    </>
+                  )}
                 </TableCell>
               </TableRow>
             ))}

@@ -13,6 +13,7 @@ import {
   Toolbar,
   Typography,
   Divider,
+  Button,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -23,30 +24,48 @@ import {
   Class as ClassIcon,
   School as SchoolIcon,
 } from '@mui/icons-material';
+import { useAuth } from '../contexts/AuthContext';
 
 const drawerWidth = 240;
 
 const Layout: React.FC = () => {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
   };
 
-  const menuItems = [
-    { text: '대시보드', icon: <DashboardIcon />, path: '/' },
-    { text: '회원 관리', icon: <PeopleIcon />, path: '/users' },
-    { text: '반 관리', icon: <ClassIcon />, path: '/classes' },
-    { text: '학생 관리', icon: <SchoolIcon />, path: '/students' },
-    { text: '프로필', icon: <PersonIcon />, path: '/profile' },
-  ];
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
+
+  // 사용자 역할에 따른 메뉴 아이템 설정
+  const getMenuItems = () => {
+    const baseItems = [
+      { text: '대시보드', icon: <DashboardIcon />, path: '/' },
+      { text: '반 관리', icon: <ClassIcon />, path: '/classes' },
+      { text: '학생 관리', icon: <SchoolIcon />, path: '/students' },
+      { text: '프로필', icon: <PersonIcon />, path: '/profile' },
+    ];
+
+    // 관리자와 선생님만 회원 관리 메뉴를 볼 수 있음
+    if (user?.role === 'ADMIN' || user?.role === 'TEACHER') {
+      baseItems.splice(1, 0, { text: '회원 관리', icon: <PeopleIcon />, path: '/users' });
+    }
+
+    return baseItems;
+  };
+
+  const menuItems = getMenuItems();
 
   const drawer = (
     <div>
       <Toolbar>
-        <Typography variant="h6" noWrap>
-          혜성 과학탐구 학원
+        <Typography variant="h6" noWrap component="div">
+          학생 관리 시스템
         </Typography>
       </Toolbar>
       <Divider />
@@ -67,11 +86,8 @@ const Layout: React.FC = () => {
       </List>
       <Divider />
       <List>
-        <ListItem
-          onClick={() => {
-            // TODO: 로그아웃 처리
-            navigate('/login');
-          }}
+        <ListItem 
+          onClick={handleLogout}
           sx={{ cursor: 'pointer' }}
         >
           <ListItemIcon>
@@ -103,28 +119,26 @@ const Layout: React.FC = () => {
           >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap component="div">
-            학생 관리 시스템
+          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
+            {user?.name}님 환영합니다
           </Typography>
         </Toolbar>
       </AppBar>
       <Box
         component="nav"
         sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
+        aria-label="mailbox folders"
       >
         <Drawer
           variant="temporary"
           open={mobileOpen}
           onClose={handleDrawerToggle}
           ModalProps={{
-            keepMounted: true, // Better open performance on mobile.
+            keepMounted: true,
           }}
           sx={{
             display: { xs: 'block', sm: 'none' },
-            '& .MuiDrawer-paper': {
-              boxSizing: 'border-box',
-              width: drawerWidth,
-            },
+            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
           }}
         >
           {drawer}
@@ -133,10 +147,7 @@ const Layout: React.FC = () => {
           variant="permanent"
           sx={{
             display: { xs: 'none', sm: 'block' },
-            '& .MuiDrawer-paper': {
-              boxSizing: 'border-box',
-              width: drawerWidth,
-            },
+            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
           }}
           open
         >

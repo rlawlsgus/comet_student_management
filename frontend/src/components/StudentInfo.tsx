@@ -7,13 +7,16 @@ import {
   TableHead,
   TableRow,
   Paper,
+  CircularProgress,
+  Box,
 } from '@mui/material';
 
 interface Student {
   id: number;
   name: string;
-  classInfo: string;
-  attendanceRecords: {
+  classInfo?: string;
+  class_info_name?: string;
+  attendanceRecords?: {
     date: string;
     classType: string;
     content: string;
@@ -21,17 +24,17 @@ interface Student {
     homeworkCompletion: number;
     homeworkAccuracy: number;
   }[];
-  examRecords: {
+  examRecords?: {
     name: string;
     score: number;
     date: string;
   }[];
-  attendanceStats: {
+  attendanceStats?: {
     totalClasses: number;
     attendedClasses: number;
     lateCount: number;
   };
-  examStats: {
+  examStats?: {
     averageScore: number;
     highestScore: number;
     lowestScore: number;
@@ -42,10 +45,21 @@ interface StudentInfoProps {
   students: Student[];
   selectedClass: string;
   onStudentSelect: (student: Student) => void;
+  loading?: boolean;
 }
 
-const StudentInfo: React.FC<StudentInfoProps> = ({ students, selectedClass, onStudentSelect }) => {
-  const filteredStudents = students.filter(student => student.classInfo === selectedClass);
+const StudentInfo: React.FC<StudentInfoProps> = ({ students, selectedClass, onStudentSelect, loading = false }) => {
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  const filteredStudents = selectedClass 
+    ? students.filter(student => student.class_info_name === selectedClass)
+    : students;
 
   return (
     <TableContainer>

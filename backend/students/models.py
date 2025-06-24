@@ -5,6 +5,7 @@ from django.utils.translation import gettext_lazy as _
 
 class User(AbstractUser):
     class Role(models.TextChoices):
+        ADMIN = "ADMIN", _("관리자")
         TEACHER = "TEACHER", _("선생님")
         ASSISTANT = "ASSISTANT", _("조교")
 
@@ -13,6 +14,7 @@ class User(AbstractUser):
         BIOLOGY = "BIOLOGY", _("생명")
         EARTH_SCIENCE = "EARTH_SCIENCE", _("지학")
 
+    name = models.CharField(max_length=100, verbose_name="이름", default="")
     role = models.CharField(max_length=10, choices=Role.choices, verbose_name="권한")
     subject = models.CharField(
         max_length=20, choices=Subject.choices, verbose_name="과목"
@@ -27,12 +29,23 @@ class User(AbstractUser):
 
 
 class Class(models.Model):
+    class DayOfWeek(models.TextChoices):
+        MONDAY = "MONDAY", _("월요일")
+        TUESDAY = "TUESDAY", _("화요일")
+        WEDNESDAY = "WEDNESDAY", _("수요일")
+        THURSDAY = "THURSDAY", _("목요일")
+        FRIDAY = "FRIDAY", _("금요일")
+        SATURDAY = "SATURDAY", _("토요일")
+        SUNDAY = "SUNDAY", _("일요일")
+
     name = models.CharField(max_length=100, verbose_name="반이름")
     subject = models.CharField(
         max_length=20, choices=User.Subject.choices, verbose_name="과목"
     )
     start_time = models.TimeField(verbose_name="수업 시작시간")
-    day_of_week = models.CharField(max_length=10, verbose_name="요일")
+    day_of_week = models.CharField(
+        max_length=10, choices=DayOfWeek.choices, verbose_name="요일"
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="생성일")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="수정일")
 

@@ -21,12 +21,16 @@ import {
   Select,
   MenuItem,
   Alert,
+  Checkbox,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { format } from 'date-fns';
 import { useParams, useNavigate } from 'react-router-dom';
+import DeleteIcon from '@mui/icons-material/Delete';
 
 interface Student {
   id: number;
@@ -61,6 +65,8 @@ const StudentManagement: React.FC = () => {
   const [openAttendanceDialog, setOpenAttendanceDialog] = useState(false);
   const [openExamDialog, setOpenExamDialog] = useState(false);
   const [error, setError] = useState<string>('');
+  const [selectedAttendances, setSelectedAttendances] = useState<number[]>([]);
+  const [selectedExams, setSelectedExams] = useState<number[]>([]);
   const [newAttendance, setNewAttendance] = useState({
     date: new Date(),
     class_type: 'regular',
@@ -200,6 +206,76 @@ const StudentManagement: React.FC = () => {
     }
   };
 
+  const handleAttendanceSelect = (attendanceId: number) => {
+    setSelectedAttendances(prev => 
+      prev.includes(attendanceId)
+        ? prev.filter(id => id !== attendanceId)
+        : [...prev, attendanceId]
+    );
+  };
+
+  const handleExamSelect = (examId: number) => {
+    setSelectedExams(prev => 
+      prev.includes(examId)
+        ? prev.filter(id => id !== examId)
+        : [...prev, examId]
+    );
+  };
+
+  const handleAttendanceSelectAll = () => {
+    if (selectedAttendances.length === attendances.length) {
+      setSelectedAttendances([]);
+    } else {
+      setSelectedAttendances(attendances.map(att => att.id));
+    }
+  };
+
+  const handleExamSelectAll = () => {
+    if (selectedExams.length === exams.length) {
+      setSelectedExams([]);
+    } else {
+      setSelectedExams(exams.map(exam => exam.id));
+    }
+  };
+
+  const handleDeleteAttendances = async () => {
+    if (selectedAttendances.length === 0) return;
+
+    try {
+      const deletePromises = selectedAttendances.map(id =>
+        fetch(`/api/attendance/${id}/`, {
+          method: 'DELETE',
+        })
+      );
+
+      await Promise.all(deletePromises);
+      setSelectedAttendances([]);
+      fetchStudentData(student!.id);
+    } catch (error) {
+      console.error('Error deleting attendances:', error);
+      setError('출석 기록 삭제 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleDeleteExams = async () => {
+    if (selectedExams.length === 0) return;
+
+    try {
+      const deletePromises = selectedExams.map(id =>
+        fetch(`/api/exams/${id}/`, {
+          method: 'DELETE',
+        })
+      );
+
+      await Promise.all(deletePromises);
+      setSelectedExams([]);
+      fetchStudentData(student!.id);
+    } catch (error) {
+      console.error('Error deleting exams:', error);
+      setError('시험 기록 삭제 중 오류가 발생했습니다.');
+    }
+  };
+
   if (!student) {
     return <Typography>학생 정보를 불러오는 중...</Typography>;
   }
@@ -228,17 +304,36 @@ const StudentManagement: React.FC = () => {
               <Typography variant="h6">
                 출석 기록
               </Typography>
-              <Button
-                variant="contained"
-                onClick={() => setOpenAttendanceDialog(true)}
-              >
-                출석 기록 추가
-              </Button>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                {selectedAttendances.length > 0 && (
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    startIcon={<DeleteIcon />}
+                    onClick={handleDeleteAttendances}
+                  >
+                    선택 삭제 ({selectedAttendances.length})
+                  </Button>
+                )}
+                <Button
+                  variant="contained"
+                  onClick={() => setOpenAttendanceDialog(true)}
+                >
+                  출석 기록 추가
+                </Button>
+              </Box>
             </Box>
             <TableContainer>
               <Table>
                 <TableHead>
                   <TableRow>
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        checked={attendances.length > 0 && selectedAttendances.length === attendances.length}
+                        indeterminate={selectedAttendances.length > 0 && selectedAttendances.length < attendances.length}
+                        onChange={handleAttendanceSelectAll}
+                      />
+                    </TableCell>
                     <TableCell>날짜</TableCell>
                     <TableCell>수업 종류</TableCell>
                     <TableCell>내용</TableCell>
@@ -250,6 +345,12 @@ const StudentManagement: React.FC = () => {
                 <TableBody>
                   {attendances.map((attendance) => (
                     <TableRow key={attendance.id}>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={selectedAttendances.includes(attendance.id)}
+                          onChange={() => handleAttendanceSelect(attendance.id)}
+                        />
+                      </TableCell>
                       <TableCell>{attendance.date}</TableCell>
                       <TableCell>{attendance.class_type}</TableCell>
                       <TableCell>{attendance.content}</TableCell>
@@ -270,17 +371,36 @@ const StudentManagement: React.FC = () => {
               <Typography variant="h6">
                 시험 기록
               </Typography>
-              <Button
-                variant="contained"
-                onClick={() => setOpenExamDialog(true)}
-              >
-                시험 기록 추가
-              </Button>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                {selectedExams.length > 0 && (
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    startIcon={<DeleteIcon />}
+                    onClick={handleDeleteExams}
+                  >
+                    선택 삭제 ({selectedExams.length})
+                  </Button>
+                )}
+                <Button
+                  variant="contained"
+                  onClick={() => setOpenExamDialog(true)}
+                >
+                  시험 기록 추가
+                </Button>
+              </Box>
             </Box>
             <TableContainer>
               <Table>
                 <TableHead>
                   <TableRow>
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        checked={exams.length > 0 && selectedExams.length === exams.length}
+                        indeterminate={selectedExams.length > 0 && selectedExams.length < exams.length}
+                        onChange={handleExamSelectAll}
+                      />
+                    </TableCell>
                     <TableCell>시험 이름</TableCell>
                     <TableCell>점수</TableCell>
                     <TableCell>만점</TableCell>
@@ -290,6 +410,12 @@ const StudentManagement: React.FC = () => {
                 <TableBody>
                   {exams.map((exam) => (
                     <TableRow key={exam.id}>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={selectedExams.includes(exam.id)}
+                          onChange={() => handleExamSelect(exam.id)}
+                        />
+                      </TableCell>
                       <TableCell>{exam.name}</TableCell>
                       <TableCell>{exam.score}</TableCell>
                       <TableCell>{exam.max_score}</TableCell>
