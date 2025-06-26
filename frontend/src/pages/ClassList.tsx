@@ -12,6 +12,12 @@ import {
   TableHead,
   TableRow,
   IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Alert,
+  CircularProgress,
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
@@ -33,6 +39,8 @@ const ClassList: React.FC = () => {
   const { user } = useAuth();
   const [classes, setClasses] = useState<Class[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedClass, setSelectedClass] = useState<Class | null>(null);
   const mountedRef = useRef(false);
 
   useEffect(() => {
@@ -46,7 +54,6 @@ const ClassList: React.FC = () => {
   const fetchClasses = async () => {
     try {
       const response = await classAPI.getClasses();
-      console.log('반 목록 응답:', response); // 디버깅용
       setClasses(response);
     } catch (error) {
       console.error('반 목록 조회 실패:', error);
@@ -59,15 +66,44 @@ const ClassList: React.FC = () => {
     navigate(`/classes/${classId}/edit`);
   };
 
-  const handleDelete = async (classId: number) => {
-    if (window.confirm('정말로 이 반을 삭제하시겠습니까?')) {
-      try {
-        await classAPI.deleteClass(classId);
-        setClasses(classes.filter(c => c.id !== classId));
-      } catch (error) {
-        console.error('반 삭제 실패:', error);
-        alert('반 삭제에 실패했습니다.');
+  const handleDelete = (classItem: Class) => {
+    setSelectedClass(classItem);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!selectedClass) return;
+
+    try {
+      const response = await classAPI.deleteClass(selectedClass.id);
+      setClasses(classes.filter(c => c.id !== selectedClass.id));
+      
+      // 성공 메시지 표시
+      if (response.message) {
+        alert(response.message);
+      } else {
+        alert('반이 성공적으로 삭제되었습니다.');
       }
+    } catch (error: any) {
+      console.error('반 삭제 실패:', error);
+      
+      // 백엔드에서 오는 에러 메시지 처리
+      let errorMessage = '반 삭제에 실패했습니다.';
+      
+      if (error.message) {
+        if (typeof error.message === 'string') {
+          errorMessage = error.message;
+        } else if (error.message.detail) {
+          errorMessage = error.message.detail;
+        } else if (error.message.error) {
+          errorMessage = error.message.error;
+        }
+      }
+      
+      alert(errorMessage);
+    } finally {
+      setDeleteDialogOpen(false);
+      setSelectedClass(null);
     }
   };
 
@@ -121,8 +157,8 @@ const ClassList: React.FC = () => {
         )}
       </Box>
 
-      <TableContainer component={Paper}>
-        <Table>
+      <TableContainer component={Paper} sx={{ maxHeight: 800 }}>
+        <Table stickyHeader>
           <TableHead>
             <TableRow>
               <TableCell>ID</TableCell>
@@ -154,7 +190,7 @@ const ClassList: React.FC = () => {
                     </IconButton>
                     <IconButton
                       color="error"
-                      onClick={() => handleDelete(classItem.id)}
+                      onClick={() => handleDelete(classItem)}
                       size="small"
                     >
                       <DeleteIcon />
@@ -166,6 +202,36 @@ const ClassList: React.FC = () => {
           </TableBody>
         </Table>
       </TableContainer>
+
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>반 삭제 확인</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            이 작업은 되돌릴 수 없습니다.
+          </Alert>
+          <Typography>
+            <strong>{selectedClass?.name}</strong> 반을 정말 삭제하시겠습니까?
+          </Typography>
+          {selectedClass && selectedClass.student_count > 0 && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              이 반에는 {selectedClass.student_count}명의 학생이 등록되어 있습니다.
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)} variant="outlined">
+            취소
+          </Button>
+          <Button onClick={confirmDelete} color="error" variant="contained">
+            삭제
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

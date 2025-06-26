@@ -55,8 +55,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const login = async (username: string, password: string) => {
-    const response = await authAPI.login(username, password);
-    setUser(response.user);
+    try {
+      const response = await authAPI.login(username, password);
+      setUser(response.user);
+    } catch (error: any) {
+      throw new Error(error.message || '로그인에 실패했습니다.');
+    }
   };
 
   const logout = async () => {

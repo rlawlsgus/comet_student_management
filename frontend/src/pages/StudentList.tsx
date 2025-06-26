@@ -17,8 +17,19 @@ import {
   Select,
   MenuItem,
   SelectChangeEvent,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Alert,
+  Tooltip,
 } from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { 
+  Edit as EditIcon, 
+  Delete as DeleteIcon,
+  AutoStories as NoteIcon 
+} from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { studentAPI, classAPI } from '../services/api';
@@ -54,6 +65,8 @@ const StudentList: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null);
 
   const [filters, setFilters] = useState({
     subject: '',
@@ -70,8 +83,6 @@ const StudentList: React.FC = () => {
         studentAPI.getStudents(),
         classAPI.getClasses()
       ]);
-      console.log('학생 목록 응답:', studentsResponse); // 디버깅용
-      console.log('반 목록 응답:', classesResponse); // 디버깅용
       setStudents(studentsResponse);
       setClasses(classesResponse);
     } catch (error) {
@@ -104,16 +115,51 @@ const StudentList: React.FC = () => {
     navigate(`/students/${studentId}/edit`);
   };
 
-  const handleDelete = async (studentId: number) => {
-    if (window.confirm('정말로 이 학생을 삭제하시겠습니까?')) {
-      try {
-        await studentAPI.deleteStudent(studentId);
-        setStudents(students.filter(s => s.id !== studentId));
-      } catch (error) {
-        console.error('학생 삭제 실패:', error);
-        alert('학생 삭제에 실패했습니다.');
+  const handleDeleteClick = (studentId: number, studentName: string) => {
+    setDeleteTarget({ id: studentId, name: studentName });
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+
+    try {
+      const response = await studentAPI.deleteStudent(deleteTarget.id);
+      // 삭제 성공 시에만 목록에서 제거
+      setStudents(students.filter(s => s.id !== deleteTarget.id));
+      
+      // 성공 메시지 표시
+      if (response.message) {
+        alert(response.message);
+      } else {
+        alert('학생이 성공적으로 삭제되었습니다.');
       }
+    } catch (error: any) {
+      console.error('학생 삭제 실패:', error);
+      
+      // 에러 메시지 처리
+      let errorMessage = '학생 삭제에 실패했습니다.';
+      
+      if (error.message) {
+        if (typeof error.message === 'string') {
+          errorMessage = error.message;
+        } else if (error.message.detail) {
+          errorMessage = error.message.detail;
+        } else if (error.message.error) {
+          errorMessage = error.message.error;
+        }
+      }
+      
+      alert(errorMessage);
     }
+    
+    setDeleteDialogOpen(false);
+    setDeleteTarget(null);
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false);
+    setDeleteTarget(null);
   };
 
   // 조교는 추가/수정/삭제 권한이 없지만 관리 권한은 있음
@@ -179,8 +225,8 @@ const StudentList: React.FC = () => {
         </Box>
       </Paper>
 
-      <TableContainer component={Paper}>
-        <Table>
+      <TableContainer component={Paper} sx={{ maxHeight: 800 }}>
+        <Table stickyHeader>
           <TableHead>
             <TableRow>
               <TableCell>ID</TableCell>
@@ -209,37 +255,84 @@ const StudentList: React.FC = () => {
                 </TableCell>
                 <TableCell>{student.exam_stats.average_score}점</TableCell>
                 <TableCell>
-                  <Button
-                    size="small"
-                    onClick={() => navigate(`/students/${student.id}/management`)}
-                    sx={{ mr: 1 }}
-                  >
-                    관리
-                  </Button>
-                  {canEdit && (
-                    <>
-                      <Button
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Tooltip title="관리">
+                      <IconButton
                         size="small"
-                        onClick={() => handleEdit(student.id)}
-                        sx={{ mr: 1 }}
+                        onClick={() => navigate(`/students/${student.id}/management`)}
+                        color="primary"
                       >
-                        수정
-                      </Button>
-                      <Button
-                        size="small"
-                        color="error"
-                        onClick={() => handleDelete(student.id)}
-                      >
-                        삭제
-                      </Button>
-                    </>
-                  )}
+                        <NoteIcon />
+                      </IconButton>
+                    </Tooltip>
+                    {canEdit && (
+                      <>
+                        <Tooltip title="수정">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleEdit(student.id)}
+                            color="primary"
+                          >
+                            <EditIcon />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="삭제">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleDeleteClick(student.id, student.name)}
+                            color="error"
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </Tooltip>
+                      </>
+                    )}
+                  </Box>
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </TableContainer>
+
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={handleDeleteCancel}
+        aria-labelledby="alert-dialog-title"
+        aria-describedby="alert-dialog-description"
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle id="alert-dialog-title">
+          학생 삭제 확인
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="alert-dialog-description">
+            <Typography variant="body1" sx={{ mb: 2 }}>
+              <strong>{deleteTarget?.name}</strong> 학생을 삭제하시겠습니까?
+            </Typography>
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              이 작업은 되돌릴 수 없으며, 학생과 관련된 모든 출석 기록 및 시험 기록도 함께 삭제됩니다.
+            </Alert>
+            <Typography variant="body2" color="text.secondary">
+              정말로 삭제하시겠습니까?
+            </Typography>
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleDeleteCancel} variant="outlined">
+            취소
+          </Button>
+          <Button 
+            onClick={handleDeleteConfirm} 
+            color="error" 
+            variant="contained"
+            autoFocus
+          >
+            삭제
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

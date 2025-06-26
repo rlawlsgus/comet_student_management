@@ -11,9 +11,11 @@ import {
   Select,
   MenuItem,
   Alert,
+  CircularProgress,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { userAPI } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 interface RegisterFormData {
   username: string;
@@ -26,6 +28,7 @@ interface RegisterFormData {
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
+  const { user: currentUser } = useAuth();
   const [formData, setFormData] = useState<RegisterFormData>({
     username: '',
     password: '',
@@ -56,14 +59,43 @@ const Register: React.FC = () => {
       return;
     }
 
+    if (formData.password.length < 8) {
+      setError('비밀번호는 최소 8자 이상이어야 합니다.');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const { confirmPassword, ...userData } = formData;
-      const response = await userAPI.createUser(userData);
-      console.log('회원가입 성공:', response);
+      // 백엔드로 전송할 데이터 준비
+      const backendData = {
+        username: formData.username,
+        password: formData.password,
+        confirm_password: formData.confirmPassword,
+        name: formData.name,
+        role: formData.role,
+        subject: formData.subject,
+      };
+
+      const response = await userAPI.createUser(backendData);
       navigate('/users'); // 회원 목록 페이지로 이동
     } catch (err: any) {
       console.error('회원가입 실패:', err);
-      setError(err.message || '회원가입 중 오류가 발생했습니다.');
+      console.error('Error details:', err.message); // 디버깅용 로그
+      
+      // 백엔드에서 오는 에러 메시지 처리
+      let errorMessage = '회원가입 중 오류가 발생했습니다.';
+      
+      if (err.message) {
+        if (typeof err.message === 'string') {
+          errorMessage = err.message;
+        } else if (err.message.detail) {
+          errorMessage = err.message.detail;
+        } else if (err.message.error) {
+          errorMessage = err.message.error;
+        }
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -92,6 +124,7 @@ const Register: React.FC = () => {
             margin="normal"
             required
             disabled={loading}
+            helperText="3자 이상 30자 이하로 입력해주세요"
           />
           
           <TextField
@@ -104,6 +137,7 @@ const Register: React.FC = () => {
             margin="normal"
             required
             disabled={loading}
+            helperText="8자 이상으로 입력해주세요"
           />
           
           <TextField
@@ -127,6 +161,7 @@ const Register: React.FC = () => {
             margin="normal"
             required
             disabled={loading}
+            helperText="2자 이상 50자 이하로 입력해주세요"
           />
           
           <FormControl fullWidth margin="normal">
@@ -138,7 +173,9 @@ const Register: React.FC = () => {
               label="역할"
               disabled={loading}
             >
-              <MenuItem value="ADMIN">관리자</MenuItem>
+              {currentUser?.role === 'ADMIN' && (
+                <MenuItem value="ADMIN">관리자</MenuItem>
+              )}
               <MenuItem value="TEACHER">선생님</MenuItem>
               <MenuItem value="ASSISTANT">조교</MenuItem>
             </Select>
@@ -165,6 +202,7 @@ const Register: React.FC = () => {
             variant="contained"
             sx={{ mt: 3 }}
             disabled={loading}
+            startIcon={loading ? <CircularProgress size={20} /> : null}
           >
             {loading ? '등록 중...' : '등록'}
           </Button>

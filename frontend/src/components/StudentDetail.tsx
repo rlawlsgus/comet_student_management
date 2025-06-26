@@ -29,6 +29,7 @@ interface Student {
   exam_records?: {
     name: string;
     score: number;
+    max_score: number;
     exam_date: string;
   }[];
   attendance_stats?: {
@@ -116,8 +117,8 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student }) => {
 
       <TabPanel value={tabValue} index={0}>
         {attendanceRecords.length > 0 ? (
-          <TableContainer component={Paper}>
-            <Table>
+          <TableContainer component={Paper} sx={{ maxHeight: 800 }}>
+            <Table stickyHeader>
               <TableHead>
                 <TableRow>
                   <TableCell>날짜</TableCell>
@@ -134,7 +135,7 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student }) => {
                     <TableCell>{record.date}</TableCell>
                     <TableCell>{record.class_type_display || getClassTypeDisplay(record.class_type)}</TableCell>
                     <TableCell>{record.content}</TableCell>
-                    <TableCell>{record.is_late ? '지각' : '정상'}</TableCell>
+                    <TableCell>{record.is_late ? '예' : '아니오'}</TableCell>
                     <TableCell>{record.homework_completion}%</TableCell>
                     <TableCell>{record.homework_accuracy}%</TableCell>
                   </TableRow>
@@ -153,8 +154,8 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student }) => {
 
       <TabPanel value={tabValue} index={1}>
         {examRecords.length > 0 ? (
-          <TableContainer component={Paper}>
-            <Table>
+          <TableContainer component={Paper} sx={{ maxHeight: 800 }}>
+            <Table stickyHeader>
               <TableHead>
                 <TableRow>
                   <TableCell>시험명</TableCell>
@@ -166,7 +167,7 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student }) => {
                 {examRecords.map((record, index) => (
                   <TableRow key={index}>
                     <TableCell>{record.name}</TableCell>
-                    <TableCell>{record.score}</TableCell>
+                    <TableCell>{record.score}/{record.max_score}</TableCell>
                     <TableCell>{record.exam_date}</TableCell>
                   </TableRow>
                 ))}

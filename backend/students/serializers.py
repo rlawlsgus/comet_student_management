@@ -18,6 +18,60 @@ class UserCreateSerializer(serializers.ModelSerializer):
         model = User
         fields = ["username", "password", "confirm_password", "name", "role", "subject"]
 
+    def validate_username(self, value):
+        """아이디 검증"""
+        if not value or not value.strip():
+            raise serializers.ValidationError("아이디는 필수 입력 항목입니다.")
+
+        if len(value.strip()) < 3:
+            raise serializers.ValidationError("아이디는 최소 3자 이상이어야 합니다.")
+
+        if len(value.strip()) > 30:
+            raise serializers.ValidationError("아이디는 최대 30자까지 입력 가능합니다.")
+
+        # 아이디 중복 확인
+        if User.objects.filter(username=value.strip()).exists():
+            raise serializers.ValidationError("이미 사용 중인 아이디입니다.")
+
+        return value.strip()
+
+    def validate_password(self, value):
+        """비밀번호 검증"""
+        if not value:
+            raise serializers.ValidationError("비밀번호는 필수 입력 항목입니다.")
+
+        if len(value) < 8:
+            raise serializers.ValidationError("비밀번호는 최소 8자 이상이어야 합니다.")
+
+        return value
+
+    def validate_name(self, value):
+        """이름 검증"""
+        if not value or not value.strip():
+            raise serializers.ValidationError("이름은 필수 입력 항목입니다.")
+
+        if len(value.strip()) < 2:
+            raise serializers.ValidationError("이름은 최소 2자 이상이어야 합니다.")
+
+        if len(value.strip()) > 50:
+            raise serializers.ValidationError("이름은 최대 50자까지 입력 가능합니다.")
+
+        return value.strip()
+
+    def validate_role(self, value):
+        """역할 검증"""
+        valid_roles = ["ADMIN", "TEACHER", "ASSISTANT"]
+        if value not in valid_roles:
+            raise serializers.ValidationError("유효하지 않은 역할입니다.")
+        return value
+
+    def validate_subject(self, value):
+        """과목 검증"""
+        valid_subjects = ["CHEMISTRY", "BIOLOGY", "EARTH_SCIENCE"]
+        if value not in valid_subjects:
+            raise serializers.ValidationError("유효하지 않은 과목입니다.")
+        return value
+
     def validate(self, attrs):
         if attrs["password"] != attrs["confirm_password"]:
             raise serializers.ValidationError("비밀번호가 일치하지 않습니다.")
@@ -33,6 +87,33 @@ class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["name", "role", "subject"]
+
+    def validate_name(self, value):
+        """이름 검증"""
+        if not value or not value.strip():
+            raise serializers.ValidationError("이름은 필수 입력 항목입니다.")
+
+        if len(value.strip()) < 2:
+            raise serializers.ValidationError("이름은 최소 2자 이상이어야 합니다.")
+
+        if len(value.strip()) > 50:
+            raise serializers.ValidationError("이름은 최대 50자까지 입력 가능합니다.")
+
+        return value.strip()
+
+    def validate_role(self, value):
+        """역할 검증"""
+        valid_roles = ["ADMIN", "TEACHER", "ASSISTANT"]
+        if value not in valid_roles:
+            raise serializers.ValidationError("유효하지 않은 역할입니다.")
+        return value
+
+    def validate_subject(self, value):
+        """과목 검증"""
+        valid_subjects = ["CHEMISTRY", "BIOLOGY", "EARTH_SCIENCE"]
+        if value not in valid_subjects:
+            raise serializers.ValidationError("유효하지 않은 과목입니다.")
+        return value
 
 
 class LoginSerializer(serializers.Serializer):
@@ -75,6 +156,74 @@ class ClassSerializer(serializers.ModelSerializer):
 
     def get_student_count(self, obj):
         return obj.student_set.count()
+
+    def validate_name(self, value):
+        """반 이름 검증"""
+        if not value or not value.strip():
+            raise serializers.ValidationError("반 이름은 필수 입력 항목입니다.")
+
+        if len(value.strip()) < 2:
+            raise serializers.ValidationError("반 이름은 최소 2자 이상이어야 합니다.")
+
+        if len(value.strip()) > 100:
+            raise serializers.ValidationError(
+                "반 이름은 최대 100자까지 입력 가능합니다."
+            )
+
+        return value.strip()
+
+    def validate_subject(self, value):
+        """과목 검증"""
+        valid_subjects = ["CHEMISTRY", "BIOLOGY", "EARTH_SCIENCE"]
+        if value not in valid_subjects:
+            raise serializers.ValidationError("유효하지 않은 과목입니다.")
+        return value
+
+    def validate_day_of_week(self, value):
+        """요일 검증"""
+        valid_days = [
+            "MONDAY",
+            "TUESDAY",
+            "WEDNESDAY",
+            "THURSDAY",
+            "FRIDAY",
+            "SATURDAY",
+            "SUNDAY",
+        ]
+        if value not in valid_days:
+            raise serializers.ValidationError("유효하지 않은 요일입니다.")
+        return value
+
+    def validate_start_time(self, value):
+        """시작 시간 검증"""
+        if not value:
+            raise serializers.ValidationError("시작 시간은 필수 입력 항목입니다.")
+        return value
+
+    def validate(self, attrs):
+        """전체 데이터 검증"""
+        # 같은 과목, 같은 요일, 같은 시간에 중복된 반이 있는지 확인
+        name = attrs.get("name")
+        subject = attrs.get("subject")
+        day_of_week = attrs.get("day_of_week")
+        start_time = attrs.get("start_time")
+
+        if all([name, subject, day_of_week, start_time]):
+            # 수정 시에는 자기 자신을 제외하고 중복 확인
+            instance = getattr(self, "instance", None)
+            queryset = Class.objects.filter(
+                subject=subject, day_of_week=day_of_week, start_time=start_time
+            )
+
+            if instance:
+                queryset = queryset.exclude(id=instance.id)
+
+            if queryset.exists():
+                raise serializers.ValidationError(
+                    "같은 과목, 같은 요일, 같은 시간에 이미 반이 존재합니다."
+                )
+
+        return attrs
 
 
 class StudentSerializer(serializers.ModelSerializer):
@@ -121,6 +270,80 @@ class StudentSerializer(serializers.ModelSerializer):
             "highest_score": max(scores),
             "lowest_score": min(scores),
         }
+
+    def validate_name(self, value):
+        """학생 이름 검증"""
+        if not value or not value.strip():
+            raise serializers.ValidationError("학생 이름은 필수 입력 항목입니다.")
+
+        if len(value.strip()) < 2:
+            raise serializers.ValidationError("학생 이름은 최소 2자 이상이어야 합니다.")
+
+        if len(value.strip()) > 100:
+            raise serializers.ValidationError(
+                "학생 이름은 최대 100자까지 입력 가능합니다."
+            )
+
+        return value.strip()
+
+    def validate_parent_phone(self, value):
+        """부모님 전화번호 검증"""
+        if not value or not value.strip():
+            raise serializers.ValidationError("부모님 전화번호는 필수 입력 항목입니다.")
+
+        # 전화번호 형식 검증 (010-0000-0000)
+        import re
+
+        phone_pattern = re.compile(r"^010-\d{4}-\d{4}$")
+        if not phone_pattern.match(value.strip()):
+            raise serializers.ValidationError(
+                "올바른 전화번호 형식으로 입력해주세요. (예: 010-0000-0000)"
+            )
+
+        return value.strip()
+
+    def validate_student_phone(self, value):
+        """학생 전화번호 검증 (선택사항)"""
+        if not value:
+            return value
+
+        # 전화번호 형식 검증 (010-0000-0000)
+        import re
+
+        phone_pattern = re.compile(r"^010-\d{4}-\d{4}$")
+        if not phone_pattern.match(value.strip()):
+            raise serializers.ValidationError(
+                "올바른 전화번호 형식으로 입력해주세요. (예: 010-0000-0000)"
+            )
+
+        return value.strip()
+
+    def validate_class_info(self, value):
+        """반 정보 검증"""
+        if not value:
+            raise serializers.ValidationError("반은 필수 선택 항목입니다.")
+        return value
+
+    def validate(self, attrs):
+        """전체 데이터 검증"""
+        # 같은 반에 같은 이름의 학생이 있는지 확인
+        name = attrs.get("name")
+        class_info = attrs.get("class_info")
+
+        if name and class_info:
+            # 수정 시에는 자기 자신을 제외하고 중복 확인
+            instance = getattr(self, "instance", None)
+            queryset = Student.objects.filter(name=name, class_info=class_info)
+
+            if instance:
+                queryset = queryset.exclude(id=instance.id)
+
+            if queryset.exists():
+                raise serializers.ValidationError(
+                    "같은 반에 같은 이름의 학생이 이미 존재합니다."
+                )
+
+        return attrs
 
 
 class AttendanceSerializer(serializers.ModelSerializer):
@@ -174,10 +397,48 @@ class ExamSerializer(serializers.ModelSerializer):
             "exam_date",
             "name",
             "score",
+            "max_score",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+    def validate_name(self, value):
+        """시험 이름 검증"""
+        if not value or not value.strip():
+            raise serializers.ValidationError("시험 이름은 필수 입력 항목입니다.")
+
+        if len(value.strip()) < 2:
+            raise serializers.ValidationError("시험 이름은 최소 2자 이상이어야 합니다.")
+
+        if len(value.strip()) > 100:
+            raise serializers.ValidationError(
+                "시험 이름은 최대 100자까지 입력 가능합니다."
+            )
+
+        return value.strip()
+
+    def validate_score(self, value):
+        """점수 검증"""
+        if value < 0:
+            raise serializers.ValidationError("점수는 0 이상이어야 합니다.")
+        return value
+
+    def validate_max_score(self, value):
+        """만점 검증"""
+        if value <= 0:
+            raise serializers.ValidationError("만점은 0보다 커야 합니다.")
+        return value
+
+    def validate(self, attrs):
+        """점수와 만점 비교 검증"""
+        score = attrs.get("score", 0)
+        max_score = attrs.get("max_score", 100)
+
+        if score > max_score:
+            raise serializers.ValidationError("점수는 만점을 초과할 수 없습니다.")
+
+        return attrs
 
 
 class StudentDetailSerializer(StudentSerializer):

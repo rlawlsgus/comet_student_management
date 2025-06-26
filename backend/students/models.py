@@ -108,6 +108,7 @@ class Exam(models.Model):
     )
     name = models.CharField(max_length=100, verbose_name="시험이름")
     score = models.PositiveIntegerField(verbose_name="점수")
+    max_score = models.PositiveIntegerField(verbose_name="만점", default=100)
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="생성일")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="수정일")
 

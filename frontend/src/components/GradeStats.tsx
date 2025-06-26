@@ -29,11 +29,11 @@ const GradeStats: React.FC<GradeStatsProps> = ({ data }) => {
 
   return (
     <Box sx={{ width: '100%', height: '100%' }}>
-      <Typography variant="h6" gutterBottom>
+      {/* <Typography variant="h6" gutterBottom>
         최근 한달간 시험 성적 통계
-      </Typography>
+      </Typography> */}
       <TableContainer component={Paper} sx={{ maxHeight: 400 }}>
-        <Table size="small">
+        <Table stickyHeader>
           <TableHead>
             <TableRow>
               <TableCell>시험명</TableCell>

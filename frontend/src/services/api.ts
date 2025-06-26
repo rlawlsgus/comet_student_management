@@ -54,12 +54,60 @@ const apiCall = async (endpoint: string, options: RequestInit = {}) => {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.error || `HTTP error! status: ${response.status}`
-        );
+        console.error("API Error Response:", errorData); // 디버깅용 로그 추가
+
+        // Django REST Framework의 오류 응답 처리
+        let errorMessage = `HTTP error! status: ${response.status}`;
+
+        if (errorData.detail) {
+          // detail 필드가 있는 경우 (우선순위 1)
+          errorMessage = errorData.detail;
+        } else if (
+          errorData.non_field_errors &&
+          errorData.non_field_errors.length > 0
+        ) {
+          // non_field_errors 배열이 있는 경우
+          errorMessage = errorData.non_field_errors[0];
+        } else if (errorData.error) {
+          // error 필드가 있는 경우
+          errorMessage = errorData.error;
+        } else if (errorData.message) {
+          // message 필드가 있는 경우
+          errorMessage = errorData.message;
+        } else if (typeof errorData === "string") {
+          // 문자열로 직접 오류 메시지가 온 경우
+          errorMessage = errorData;
+        } else if (typeof errorData === "object") {
+          // 객체인 경우 첫 번째 필드의 값을 사용
+          const firstKey = Object.keys(errorData)[0];
+          if (firstKey) {
+            const firstValue = errorData[firstKey];
+            if (Array.isArray(firstValue)) {
+              errorMessage = firstValue[0]; // 배열의 첫 번째 요소
+            } else if (typeof firstValue === "string") {
+              errorMessage = firstValue;
+            }
+          }
+        }
+
+        throw new Error(errorMessage);
       }
 
-      return await response.json();
+      // DELETE 요청이나 응답 본문이 없는 경우 빈 객체 반환
+      if (
+        response.status === 204 ||
+        response.headers.get("content-length") === "0"
+      ) {
+        return {};
+      }
+
+      // 응답 본문이 있는 경우에만 JSON 파싱 시도
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        return await response.json();
+      } else {
+        return {};
+      }
     } catch (error) {
       console.error("API call failed:", error);
       throw error;
@@ -270,6 +318,18 @@ export const examAPI = {
 
   getExam: async (id: number) => {
     return apiCall(`/exams/${id}/`);
+  },
+
+  getExamAverages: async (studentId?: number, classId?: number) => {
+    const params = new URLSearchParams();
+    if (studentId) params.append("student_id", studentId.toString());
+    if (classId) params.append("class_id", classId.toString());
+
+    const queryString = params.toString();
+    const endpoint = queryString
+      ? `/exams/exam_averages/?${queryString}`
+      : "/exams/exam_averages/";
+    return apiCall(endpoint);
   },
 
   createExam: async (examData: any) => {

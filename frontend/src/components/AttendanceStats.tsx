@@ -23,10 +23,16 @@ interface AttendanceStatsProps {
 }
 
 const AttendanceStats: React.FC<AttendanceStatsProps> = ({ data }) => {
+  // 현재 월 표시
+  const currentMonth = new Date().toLocaleDateString('ko-KR', { 
+    year: 'numeric', 
+    month: 'long' 
+  });
+
   return (
     <Box sx={{ width: '100%', height: '100%' }}>
-      <Typography variant="h6" gutterBottom>
-        출석 통계
+      <Typography variant="h6" gutterBottom align="center">
+        {currentMonth} 출석 통계
       </Typography>
       <ResponsiveContainer width="100%" height="80%">
         <BarChart

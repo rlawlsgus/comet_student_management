@@ -230,7 +230,7 @@ const Profile: React.FC = () => {
                   value={profileData.role}
                   onChange={handleChange}
                   label="역할"
-                  disabled={isAssistant}
+                  disabled={isAssistant || user?.role === 'TEACHER'}
                 >
                   <MenuItem value="ADMIN">관리자</MenuItem>
                   <MenuItem value="TEACHER">선생님</MenuItem>
