@@ -67,7 +67,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
 
     def validate_subject(self, value):
         """과목 검증"""
-        valid_subjects = ["CHEMISTRY", "BIOLOGY", "EARTH_SCIENCE"]
+        valid_subjects = ["CHEMISTRY", "BIOLOGY", "GEOSCIENCE"]
         if value not in valid_subjects:
             raise serializers.ValidationError("유효하지 않은 과목입니다.")
         return value
@@ -110,7 +110,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 
     def validate_subject(self, value):
         """과목 검증"""
-        valid_subjects = ["CHEMISTRY", "BIOLOGY", "EARTH_SCIENCE"]
+        valid_subjects = ["CHEMISTRY", "BIOLOGY", "GEOSCIENCE"]
         if value not in valid_subjects:
             raise serializers.ValidationError("유효하지 않은 과목입니다.")
         return value
@@ -174,7 +174,7 @@ class ClassSerializer(serializers.ModelSerializer):
 
     def validate_subject(self, value):
         """과목 검증"""
-        valid_subjects = ["CHEMISTRY", "BIOLOGY", "EARTH_SCIENCE"]
+        valid_subjects = ["CHEMISTRY", "BIOLOGY", "GEOSCIENCE"]
         if value not in valid_subjects:
             raise serializers.ValidationError("유효하지 않은 과목입니다.")
         return value

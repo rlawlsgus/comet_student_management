@@ -355,8 +355,17 @@ export const examAPI = {
 
 // 대시보드 관련 API
 export const dashboardAPI = {
-  getDashboardStats: async (classId?: number) => {
-    const params = classId ? `?class_id=${classId}` : "";
-    return apiCall(`/dashboard/${params}`);
+  getDashboardStats: async (classId?: number, month?: Date) => {
+    const params = new URLSearchParams();
+    if (classId) params.append("class_id", classId.toString());
+    if (month) {
+      const year = month.getFullYear();
+      const monthNum = month.getMonth() + 1; // getMonth()는 0부터 시작하므로 +1
+      params.append("month", `${year}-${monthNum.toString().padStart(2, "0")}`);
+    }
+
+    const queryString = params.toString();
+    const endpoint = queryString ? `/dashboard/?${queryString}` : "/dashboard/";
+    return apiCall(endpoint);
   },
 };

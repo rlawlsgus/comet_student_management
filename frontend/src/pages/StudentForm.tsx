@@ -18,7 +18,7 @@ import { studentAPI, classAPI } from '../services/api';
 
 interface StudentFormData {
   name: string;
-  subject: 'CHEMISTRY' | 'BIOLOGY' | 'EARTH_SCIENCE';
+  subject: 'CHEMISTRY' | 'BIOLOGY' | 'GEOSCIENCE';
   classId: number;
   parentPhone: string;
   studentPhone?: string;
@@ -27,7 +27,7 @@ interface StudentFormData {
 interface Class {
   id: number;
   name: string;
-  subject: 'CHEMISTRY' | 'BIOLOGY' | 'EARTH_SCIENCE';
+  subject: 'CHEMISTRY' | 'BIOLOGY' | 'GEOSCIENCE';
 }
 
 const StudentForm: React.FC = () => {
@@ -98,7 +98,7 @@ const StudentForm: React.FC = () => {
 
     // 과목이 변경되면 반 선택 초기화 (단, 기존 반이 새 과목에 속하면 유지)
     if (name === 'subject') {
-      const newSubject = value as 'CHEMISTRY' | 'BIOLOGY' | 'EARTH_SCIENCE';
+      const newSubject = value as 'CHEMISTRY' | 'BIOLOGY' | 'GEOSCIENCE';
       const currentClass = classes.find(c => c.id === formData.classId);
       
       // 현재 선택된 반이 새 과목에 속하지 않으면 초기화
@@ -214,7 +214,7 @@ const StudentForm: React.FC = () => {
             >
               <MenuItem value="CHEMISTRY">화학</MenuItem>
               <MenuItem value="BIOLOGY">생명</MenuItem>
-              <MenuItem value="EARTH_SCIENCE">지학</MenuItem>
+              <MenuItem value="GEOSCIENCE">지학</MenuItem>
             </Select>
           </FormControl>
 

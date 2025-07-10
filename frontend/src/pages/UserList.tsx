@@ -29,7 +29,7 @@ interface User {
   username: string;
   name: string;
   role: 'ADMIN' | 'TEACHER' | 'ASSISTANT';
-  subject: 'CHEMISTRY' | 'BIOLOGY' | 'EARTH_SCIENCE';
+  subject: 'CHEMISTRY' | 'BIOLOGY' | 'GEOSCIENCE';
   date_joined: string;
 }
 
@@ -114,7 +114,7 @@ const UserList: React.FC = () => {
     const subjects = {
       'CHEMISTRY': '화학',
       'BIOLOGY': '생명',
-      'EARTH_SCIENCE': '지학',
+      'GEOSCIENCE': '지학',
     };
     return subjects[subject as keyof typeof subjects] || subject;
   };

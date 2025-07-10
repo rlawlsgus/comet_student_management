@@ -22,7 +22,7 @@ interface User {
   username: string;
   name: string;
   role: 'ADMIN' | 'TEACHER' | 'ASSISTANT';
-  subject: 'CHEMISTRY' | 'BIOLOGY' | 'EARTH_SCIENCE';
+  subject: 'CHEMISTRY' | 'BIOLOGY' | 'GEOSCIENCE';
 }
 
 const UserEdit: React.FC = () => {
@@ -178,7 +178,7 @@ const UserEdit: React.FC = () => {
             >
               <MenuItem value="CHEMISTRY">화학</MenuItem>
               <MenuItem value="BIOLOGY">생명</MenuItem>
-              <MenuItem value="EARTH_SCIENCE">지학</MenuItem>
+              <MenuItem value="GEOSCIENCE">지학</MenuItem>
             </Select>
           </FormControl>
 

@@ -25,7 +25,7 @@ interface ProfileData {
   currentPassword: string;
   newPassword: string;
   confirmNewPassword: string;
-  subject: 'CHEMISTRY' | 'BIOLOGY' | 'EARTH_SCIENCE';
+  subject: 'CHEMISTRY' | 'BIOLOGY' | 'GEOSCIENCE';
 }
 
 const Profile: React.FC = () => {
@@ -249,7 +249,7 @@ const Profile: React.FC = () => {
                 >
                   <MenuItem value="CHEMISTRY">화학</MenuItem>
                   <MenuItem value="BIOLOGY">생명</MenuItem>
-                  <MenuItem value="EARTH_SCIENCE">지학</MenuItem>
+                  <MenuItem value="GEOSCIENCE">지학</MenuItem>
                 </Select>
               </FormControl>
 

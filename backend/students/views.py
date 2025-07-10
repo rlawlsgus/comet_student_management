@@ -8,7 +8,7 @@ from django.db.models import Count, Avg, Max, Min
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from .models import User, Class, Student, Attendance, Exam
 from .serializers import (
     UserSerializer,
@@ -874,7 +874,16 @@ class ExamViewSet(viewsets.ModelViewSet):
         class_id = request.query_params.get("class_id", None)
 
         if student_id:
-            queryset = queryset.filter(attendance__student_id=student_id)
+            # 해당 학생의 반 정보를 가져와서 같은 반의 시험들만 필터링
+            try:
+                student = Student.objects.get(id=student_id)
+                class_id = student.class_info.id
+            except Student.DoesNotExist:
+                return Response(
+                    {"detail": "존재하지 않는 학생입니다."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
         if class_id:
             queryset = queryset.filter(attendance__student__class_info_id=class_id)
 
@@ -972,6 +981,18 @@ class DashboardView(APIView):
         """대시보드 통계 데이터"""
         user = request.user
         class_id = request.query_params.get("class_id", None)
+        month_param = request.query_params.get("month", None)
+
+        # 월 파라미터 처리
+        if month_param:
+            try:
+                # "YYYY-MM" 형식으로 받은 월을 파싱
+                year, month = map(int, month_param.split("-"))
+                target_month = date(year, month, 1)
+            except (ValueError, TypeError):
+                target_month = date.today()
+        else:
+            target_month = date.today()
 
         # 반 목록 - 관리자는 모든 반을, 선생님과 조교는 해당 과목의 반만 볼 수 있음
         classes = Class.objects.all()
@@ -1000,16 +1021,14 @@ class DashboardView(APIView):
             ):
                 students = Student.objects.filter(class_info_id=class_id)
 
-                # 현재 월의 첫날과 마지막날 계산
-                from datetime import date, timedelta
+                # 선택된 월의 첫날과 마지막날 계산
                 import calendar
 
-                today = date.today()
-                first_day = date(today.year, today.month, 1)
+                first_day = date(target_month.year, target_month.month, 1)
                 last_day = date(
-                    today.year,
-                    today.month,
-                    calendar.monthrange(today.year, today.month)[1],
+                    target_month.year,
+                    target_month.month,
+                    calendar.monthrange(target_month.year, target_month.month)[1],
                 )
 
                 # 현재 월의 출석 데이터 가져오기
@@ -1064,8 +1083,6 @@ class DashboardView(APIView):
                 user.role == User.Role.ADMIN or selected_class.subject == user.subject
             ):
                 # 최근 한달간의 시험 가져오기
-                from datetime import date, timedelta
-
                 one_month_ago = date.today() - timedelta(days=30)
 
                 recent_exams = Exam.objects.filter(

@@ -28,7 +28,7 @@ import { formatTime } from '../utils/dateUtils';
 interface Class {
   id: number;
   name: string;
-  subject: 'CHEMISTRY' | 'BIOLOGY' | 'EARTH_SCIENCE';
+  subject: 'CHEMISTRY' | 'BIOLOGY' | 'GEOSCIENCE';
   day_of_week: 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY';
   start_time: string;
   student_count: number;
@@ -124,7 +124,7 @@ const ClassList: React.FC = () => {
     const subjects = {
       'CHEMISTRY': '화학',
       'BIOLOGY': '생명',
-      'EARTH_SCIENCE': '지학',
+      'GEOSCIENCE': '지학',
     };
     return subjects[subject as keyof typeof subjects] || subject;
   };

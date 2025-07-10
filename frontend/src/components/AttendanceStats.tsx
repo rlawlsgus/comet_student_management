@@ -1,5 +1,6 @@
-import React from 'react';
-import { Box, Typography } from '@mui/material';
+import React, { useState } from 'react';
+import { Box, Typography, IconButton } from '@mui/material';
+import { ChevronLeft, ChevronRight } from '@mui/icons-material';
 import {
   BarChart,
   Bar,
@@ -20,20 +21,66 @@ interface AttendanceData {
 
 interface AttendanceStatsProps {
   data: AttendanceData[];
+  selectedMonth?: Date;
+  onMonthChange?: (date: Date) => void;
 }
 
-const AttendanceStats: React.FC<AttendanceStatsProps> = ({ data }) => {
-  // 현재 월 표시
-  const currentMonth = new Date().toLocaleDateString('ko-KR', { 
+const AttendanceStats: React.FC<AttendanceStatsProps> = ({ 
+  data, 
+  selectedMonth = new Date(),
+  onMonthChange 
+}) => {
+  const [currentMonth, setCurrentMonth] = useState<Date>(selectedMonth);
+
+  // 월 이동 함수
+  const changeMonth = (direction: 'prev' | 'next') => {
+    const newMonth = new Date(currentMonth);
+    if (direction === 'prev') {
+      newMonth.setMonth(newMonth.getMonth() - 1);
+    } else {
+      newMonth.setMonth(newMonth.getMonth() + 1);
+    }
+    setCurrentMonth(newMonth);
+    if (onMonthChange) {
+      onMonthChange(newMonth);
+    }
+  };
+
+  // 월 표시
+  const monthDisplay = currentMonth.toLocaleDateString('ko-KR', { 
     year: 'numeric', 
     month: 'long' 
   });
 
   return (
     <Box sx={{ width: '100%', height: '100%' }}>
-      <Typography variant="h6" gutterBottom align="center">
-        {currentMonth} 출석 통계
-      </Typography>
+      {/* 헤더와 네비게이션 */}
+      <Box sx={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'space-between',
+        mb: 2 
+      }}>
+        <IconButton 
+          onClick={() => changeMonth('prev')}
+          size="small"
+        >
+          <ChevronLeft />
+        </IconButton>
+        
+        <Typography variant="h6" align="center" sx={{ flex: 1 }}>
+          {monthDisplay} 출석 통계
+        </Typography>
+        
+        <IconButton 
+          onClick={() => changeMonth('next')}
+          size="small"
+        >
+          <ChevronRight />
+        </IconButton>
+      </Box>
+
+      {/* 차트 */}
       <ResponsiveContainer width="100%" height="80%">
         <BarChart
           data={data}
@@ -54,6 +101,21 @@ const AttendanceStats: React.FC<AttendanceStatsProps> = ({ data }) => {
           <Bar dataKey="late" name="지각" fill="#ff9800" />
         </BarChart>
       </ResponsiveContainer>
+
+      {/* 데이터가 없을 때 안내 메시지 */}
+      {(!data || data.length === 0) && (
+        <Box sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          height: '60%',
+          color: 'text.secondary'
+        }}>
+          <Typography variant="body2">
+            {monthDisplay}의 출석 데이터가 없습니다.
+          </Typography>
+        </Box>
+      )}
     </Box>
   );
 };

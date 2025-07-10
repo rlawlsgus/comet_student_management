@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -11,7 +11,12 @@ import {
   TableHead,
   TableRow,
   Paper,
+  Card,
+  CardContent,
+  LinearProgress,
+  Chip,
 } from '@mui/material';
+import { examAPI } from '../services/api';
 
 interface Student {
   id: number;
@@ -44,6 +49,14 @@ interface Student {
   };
 }
 
+interface ExamAverage {
+  name: string;
+  average_score: number;
+  max_score: number;
+  min_score: number;
+  count: number;
+}
+
 interface TabPanelProps {
   children?: React.ReactNode;
   index: number;
@@ -72,6 +85,8 @@ interface StudentDetailProps {
 
 const StudentDetail: React.FC<StudentDetailProps> = ({ student }) => {
   const [tabValue, setTabValue] = useState(0);
+  const [examAverages, setExamAverages] = useState<ExamAverage[]>([]);
+  const [loading, setLoading] = useState(false);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -87,6 +102,25 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student }) => {
     return classTypes[classType as keyof typeof classTypes] || classType;
   };
 
+  // 시험별 평균 점수 가져오기
+  useEffect(() => {
+    const fetchExamAverages = async () => {
+      if (!student) return;
+      
+      try {
+        setLoading(true);
+        const averages = await examAPI.getExamAverages(student.id);
+        setExamAverages(averages);
+      } catch (error) {
+        console.error('시험 평균 점수 로드 실패:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchExamAverages();
+  }, [student]);
+
   if (!student) {
     return (
       <Box sx={{ p: 3, textAlign: 'center' }}>
@@ -101,6 +135,11 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student }) => {
   const examRecords = student.exam_records || [];
   const attendanceStats = student.attendance_stats || { total_classes: 0, attended_classes: 0, late_count: 0 };
   const examStats = student.exam_stats || { average_score: 0, highest_score: 0, lowest_score: 0 };
+
+  // 출석률 계산
+  const attendanceRate = attendanceStats.total_classes > 0 
+    ? (attendanceStats.attended_classes / attendanceStats.total_classes) * 100 
+    : 0;
 
   return (
     <Box>
@@ -135,7 +174,7 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student }) => {
                     <TableCell>{record.date}</TableCell>
                     <TableCell>{record.class_type_display || getClassTypeDisplay(record.class_type)}</TableCell>
                     <TableCell>{record.content}</TableCell>
-                    <TableCell>{record.is_late ? '예' : '아니오'}</TableCell>
+                    <TableCell>{record.is_late ? '지각' : '정상'}</TableCell>
                     <TableCell>{record.homework_completion}%</TableCell>
                     <TableCell>{record.homework_accuracy}%</TableCell>
                   </TableRow>
@@ -160,17 +199,39 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student }) => {
                 <TableRow>
                   <TableCell>시험명</TableCell>
                   <TableCell>점수</TableCell>
+                  <TableCell>반 평균</TableCell>
                   <TableCell>날짜</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {examRecords.map((record, index) => (
-                  <TableRow key={index}>
-                    <TableCell>{record.name}</TableCell>
-                    <TableCell>{record.score}/{record.max_score}</TableCell>
-                    <TableCell>{record.exam_date}</TableCell>
-                  </TableRow>
-                ))}
+                {examRecords.map((record, index) => {
+                  const examAverage = examAverages.find(avg => avg.name === record.name);
+                  const isAboveAverage = examAverage ? record.score >= examAverage.average_score : false;
+                  
+                  return (
+                    <TableRow key={index}>
+                      <TableCell>{record.name}</TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="body2">
+                            {record.score}/{record.max_score}
+                          </Typography>
+                          {examAverage && (
+                            <Chip 
+                              label={isAboveAverage ? '평균 이상' : '평균 이하'} 
+                              color={isAboveAverage ? 'success' : 'warning'}
+                              size="small"
+                            />
+                          )}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        {examAverage ? `${Math.round(examAverage.average_score)}/${record.max_score}` : '-'}
+                      </TableCell>
+                      <TableCell>{record.exam_date}</TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>
@@ -184,24 +245,91 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student }) => {
       </TabPanel>
 
       <TabPanel value={tabValue} index={2}>
-        <Box sx={{ p: 2 }}>
-          <Typography variant="subtitle1" gutterBottom>
-            출석 통계
-          </Typography>
-          <Typography>
-            총 수업: {attendanceStats.total_classes}회
-            출석: {attendanceStats.attended_classes}회
-            지각: {attendanceStats.late_count}회
-          </Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          {/* 출석 통계 */}
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom color="primary">
+                출석 통계
+              </Typography>
+              <Box sx={{ mb: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2">출석률</Typography>
+                  <Typography variant="body2" fontWeight="bold">
+                    {Math.round(attendanceRate)}%
+                  </Typography>
+                </Box>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={attendanceRate} 
+                  sx={{ height: 8, borderRadius: 4 }}
+                />
+              </Box>
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <Box sx={{ flex: 1, textAlign: 'center' }}>
+                  <Typography variant="h4" color="primary" fontWeight="bold">
+                    {attendanceStats.total_classes}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    총 수업
+                  </Typography>
+                </Box>
+                <Box sx={{ flex: 1, textAlign: 'center' }}>
+                  <Typography variant="h4" color="success.main" fontWeight="bold">
+                    {attendanceStats.attended_classes}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    출석
+                  </Typography>
+                </Box>
+                <Box sx={{ flex: 1, textAlign: 'center' }}>
+                  <Typography variant="h4" color="error.main" fontWeight="bold">
+                    {attendanceStats.late_count}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    지각
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
 
-          <Typography variant="subtitle1" sx={{ mt: 2 }} gutterBottom>
-            시험 통계
-          </Typography>
-          <Typography>
-            평균 점수: {examStats.average_score}점
-            최고 점수: {examStats.highest_score}점
-            최저 점수: {examStats.lowest_score}점
-          </Typography>
+          {/* 시험 통계 */}
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom color="primary">
+                시험 통계
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <Box sx={{ flex: 1, textAlign: 'center' }}>
+                  <Typography variant="h4" color="primary" fontWeight="bold">
+                    {examStats.average_score}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    평균 점수
+                  </Typography>
+                </Box>
+                <Box sx={{ flex: 1, textAlign: 'center' }}>
+                  <Typography variant="h4" color="success.main" fontWeight="bold">
+                    {examStats.highest_score}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    최고 점수
+                  </Typography>
+                </Box>
+                <Box sx={{ flex: 1, textAlign: 'center' }}>
+                  <Typography variant="h4" color="warning.main" fontWeight="bold">
+                    {examStats.lowest_score}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    최저 점수
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+
+
         </Box>
       </TabPanel>
     </Box>

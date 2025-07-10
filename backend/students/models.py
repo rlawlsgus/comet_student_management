@@ -12,7 +12,7 @@ class User(AbstractUser):
     class Subject(models.TextChoices):
         CHEMISTRY = "CHEMISTRY", _("화학")
         BIOLOGY = "BIOLOGY", _("생명")
-        EARTH_SCIENCE = "EARTH_SCIENCE", _("지학")
+        GEOSCIENCE = "GEOSCIENCE", _("지학")
 
     name = models.CharField(max_length=100, verbose_name="이름", default="")
     role = models.CharField(max_length=10, choices=Role.choices, verbose_name="권한")

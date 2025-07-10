@@ -16,17 +16,18 @@ const Dashboard: React.FC = () => {
   const [students, setStudents] = useState<any[]>([]);
   const [attendanceStats, setAttendanceStats] = useState<any[]>([]);
   const [gradeStats, setGradeStats] = useState<any[]>([]);
+  const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const mountedRef = useRef(false);
 
   // 대시보드 데이터 로드
-  const loadDashboardData = async (classId?: number) => {
+  const loadDashboardData = async (classId?: number, month?: Date) => {
     setLoading(true);
     setError('');
     
     try {
-      const stats = await dashboardAPI.getDashboardStats(classId);
+      const stats = await dashboardAPI.getDashboardStats(classId, month);
       setClasses(stats.class_stats || []);
       setAttendanceStats(stats.attendance_stats || []);
       setGradeStats(stats.grade_stats || []);
@@ -46,18 +47,27 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  // 월 변경 핸들러
+  const handleMonthChange = async (newMonth: Date) => {
+    setSelectedMonth(newMonth);
+    if (selectedClassId) {
+      await loadDashboardData(selectedClassId, newMonth);
+    }
+  };
+
   useEffect(() => {
     // 컴포넌트가 마운트되었는지 확인
     if (!mountedRef.current) {
       mountedRef.current = true;
-      loadDashboardData();
+      loadDashboardData(undefined, new Date());
     }
   }, []);
 
   const handleClassSelect = async (classId: number) => {
     setSelectedClassId(classId);
     setSelectedStudent(null);
-    await loadDashboardData(classId);
+    setSelectedMonth(new Date()); // 반 선택 시 현재 월로 초기화
+    await loadDashboardData(classId, new Date());
   };
 
   const handleStudentSelect = async (student: any) => {
@@ -136,18 +146,20 @@ const Dashboard: React.FC = () => {
           </Paper>
         </Box>
 
-        {/* 통계 섹션 */}
-        {(attendanceStats.length > 0 || gradeStats.length > 0) && (
+        {/* 통계 섹션 - 반이 선택되었을 때만 표시 */}
+        {selectedClassId && (
           <Box sx={{ display: 'flex', gap: 3 }}>
             {/* 출석 통계 */}
-            {attendanceStats.length > 0 && (
-              <Paper sx={{ p: 2, flex: 1 }}>
-                <Typography component="h2" variant="h6" color="primary" gutterBottom>
-                  출석 통계
-                </Typography>
-                <AttendanceStats data={attendanceStats} />
-              </Paper>
-            )}
+            <Paper sx={{ p: 2, flex: 1 }}>
+              <Typography component="h2" variant="h6" color="primary" gutterBottom>
+                출석 통계
+              </Typography>
+              <AttendanceStats 
+                data={attendanceStats} 
+                selectedMonth={selectedMonth}
+                onMonthChange={handleMonthChange}
+              />
+            </Paper>
 
             {/* 성적 통계 */}
             {gradeStats.length > 0 && (
@@ -159,6 +171,18 @@ const Dashboard: React.FC = () => {
               </Paper>
             )}
           </Box>
+        )}
+
+        {/* 반을 선택하지 않았을 때 안내 메시지 */}
+        {!selectedClassId && (
+          <Paper sx={{ p: 3, textAlign: 'center' }}>
+            <Typography variant="h6" color="text.secondary" gutterBottom>
+              통계를 보려면 반을 선택해주세요
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              위의 반 목록에서 원하는 반을 클릭하면 해당 반의 출석 및 성적 통계를 확인할 수 있습니다.
+            </Typography>
+          </Paper>
         )}
       </Box>
     </Container>

@@ -12,105 +12,328 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('auth', '0012_alter_user_first_name_max_length'),
+        ("auth", "0012_alter_user_first_name_max_length"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Attendance',
+            name="Attendance",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('date', models.DateField(verbose_name='출석일')),
-                ('class_type', models.CharField(choices=[('REGULAR', '정규'), ('MAKEUP', '대체'), ('EXTRA', '보강'), ('ADDITIONAL', '추가')], max_length=10, verbose_name='수업종류')),
-                ('content', models.TextField(verbose_name='수업내용')),
-                ('is_late', models.BooleanField(default=False, verbose_name='지각여부')),
-                ('homework_completion', models.PositiveIntegerField(verbose_name='숙제이행도')),
-                ('homework_accuracy', models.PositiveIntegerField(verbose_name='숙제정답률')),
-                ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='생성일')),
-                ('updated_at', models.DateTimeField(auto_now=True, verbose_name='수정일')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("date", models.DateField(verbose_name="출석일")),
+                (
+                    "class_type",
+                    models.CharField(
+                        choices=[
+                            ("REGULAR", "정규"),
+                            ("MAKEUP", "대체"),
+                            ("EXTRA", "보강"),
+                            ("ADDITIONAL", "추가"),
+                        ],
+                        max_length=10,
+                        verbose_name="수업종류",
+                    ),
+                ),
+                ("content", models.TextField(verbose_name="수업내용")),
+                (
+                    "is_late",
+                    models.BooleanField(default=False, verbose_name="지각여부"),
+                ),
+                (
+                    "homework_completion",
+                    models.PositiveIntegerField(verbose_name="숙제이행도"),
+                ),
+                (
+                    "homework_accuracy",
+                    models.PositiveIntegerField(verbose_name="숙제정답률"),
+                ),
+                (
+                    "created_at",
+                    models.DateTimeField(auto_now_add=True, verbose_name="생성일"),
+                ),
+                (
+                    "updated_at",
+                    models.DateTimeField(auto_now=True, verbose_name="수정일"),
+                ),
             ],
             options={
-                'verbose_name': '출석',
-                'verbose_name_plural': '출석',
+                "verbose_name": "출석",
+                "verbose_name_plural": "출석",
             },
         ),
         migrations.CreateModel(
-            name='Class',
+            name="Class",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=100, verbose_name='반이름')),
-                ('subject', models.CharField(choices=[('CHEMISTRY', '화학'), ('BIOLOGY', '생명'), ('EARTH_SCIENCE', '지학')], max_length=20, verbose_name='과목')),
-                ('start_time', models.TimeField(verbose_name='수업 시작시간')),
-                ('day_of_week', models.CharField(max_length=10, verbose_name='요일')),
-                ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='생성일')),
-                ('updated_at', models.DateTimeField(auto_now=True, verbose_name='수정일')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=100, verbose_name="반이름")),
+                (
+                    "subject",
+                    models.CharField(
+                        choices=[
+                            ("CHEMISTRY", "화학"),
+                            ("BIOLOGY", "생명"),
+                            ("GEOSCIENCE", "지학"),
+                        ],
+                        max_length=20,
+                        verbose_name="과목",
+                    ),
+                ),
+                ("start_time", models.TimeField(verbose_name="수업 시작시간")),
+                ("day_of_week", models.CharField(max_length=10, verbose_name="요일")),
+                (
+                    "created_at",
+                    models.DateTimeField(auto_now_add=True, verbose_name="생성일"),
+                ),
+                (
+                    "updated_at",
+                    models.DateTimeField(auto_now=True, verbose_name="수정일"),
+                ),
             ],
             options={
-                'verbose_name': '반',
-                'verbose_name_plural': '반',
+                "verbose_name": "반",
+                "verbose_name_plural": "반",
             },
         ),
         migrations.CreateModel(
-            name='User',
+            name="User",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('password', models.CharField(max_length=128, verbose_name='password')),
-                ('last_login', models.DateTimeField(blank=True, null=True, verbose_name='last login')),
-                ('is_superuser', models.BooleanField(default=False, help_text='Designates that this user has all permissions without explicitly assigning them.', verbose_name='superuser status')),
-                ('username', models.CharField(error_messages={'unique': 'A user with that username already exists.'}, help_text='Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only.', max_length=150, unique=True, validators=[django.contrib.auth.validators.UnicodeUsernameValidator()], verbose_name='username')),
-                ('first_name', models.CharField(blank=True, max_length=150, verbose_name='first name')),
-                ('last_name', models.CharField(blank=True, max_length=150, verbose_name='last name')),
-                ('email', models.EmailField(blank=True, max_length=254, verbose_name='email address')),
-                ('is_staff', models.BooleanField(default=False, help_text='Designates whether the user can log into this admin site.', verbose_name='staff status')),
-                ('is_active', models.BooleanField(default=True, help_text='Designates whether this user should be treated as active. Unselect this instead of deleting accounts.', verbose_name='active')),
-                ('date_joined', models.DateTimeField(default=django.utils.timezone.now, verbose_name='date joined')),
-                ('role', models.CharField(choices=[('TEACHER', '선생님'), ('ASSISTANT', '조교')], max_length=10, verbose_name='권한')),
-                ('subject', models.CharField(choices=[('CHEMISTRY', '화학'), ('BIOLOGY', '생명'), ('EARTH_SCIENCE', '지학')], max_length=20, verbose_name='과목')),
-                ('groups', models.ManyToManyField(blank=True, help_text='The groups this user belongs to. A user will get all permissions granted to each of their groups.', related_name='user_set', related_query_name='user', to='auth.group', verbose_name='groups')),
-                ('user_permissions', models.ManyToManyField(blank=True, help_text='Specific permissions for this user.', related_name='user_set', related_query_name='user', to='auth.permission', verbose_name='user permissions')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("password", models.CharField(max_length=128, verbose_name="password")),
+                (
+                    "last_login",
+                    models.DateTimeField(
+                        blank=True, null=True, verbose_name="last login"
+                    ),
+                ),
+                (
+                    "is_superuser",
+                    models.BooleanField(
+                        default=False,
+                        help_text="Designates that this user has all permissions without explicitly assigning them.",
+                        verbose_name="superuser status",
+                    ),
+                ),
+                (
+                    "username",
+                    models.CharField(
+                        error_messages={
+                            "unique": "A user with that username already exists."
+                        },
+                        help_text="Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only.",
+                        max_length=150,
+                        unique=True,
+                        validators=[
+                            django.contrib.auth.validators.UnicodeUsernameValidator()
+                        ],
+                        verbose_name="username",
+                    ),
+                ),
+                (
+                    "first_name",
+                    models.CharField(
+                        blank=True, max_length=150, verbose_name="first name"
+                    ),
+                ),
+                (
+                    "last_name",
+                    models.CharField(
+                        blank=True, max_length=150, verbose_name="last name"
+                    ),
+                ),
+                (
+                    "email",
+                    models.EmailField(
+                        blank=True, max_length=254, verbose_name="email address"
+                    ),
+                ),
+                (
+                    "is_staff",
+                    models.BooleanField(
+                        default=False,
+                        help_text="Designates whether the user can log into this admin site.",
+                        verbose_name="staff status",
+                    ),
+                ),
+                (
+                    "is_active",
+                    models.BooleanField(
+                        default=True,
+                        help_text="Designates whether this user should be treated as active. Unselect this instead of deleting accounts.",
+                        verbose_name="active",
+                    ),
+                ),
+                (
+                    "date_joined",
+                    models.DateTimeField(
+                        default=django.utils.timezone.now, verbose_name="date joined"
+                    ),
+                ),
+                (
+                    "role",
+                    models.CharField(
+                        choices=[("TEACHER", "선생님"), ("ASSISTANT", "조교")],
+                        max_length=10,
+                        verbose_name="권한",
+                    ),
+                ),
+                (
+                    "subject",
+                    models.CharField(
+                        choices=[
+                            ("CHEMISTRY", "화학"),
+                            ("BIOLOGY", "생명"),
+                            ("GEOSCIENCE", "지학"),
+                        ],
+                        max_length=20,
+                        verbose_name="과목",
+                    ),
+                ),
+                (
+                    "groups",
+                    models.ManyToManyField(
+                        blank=True,
+                        help_text="The groups this user belongs to. A user will get all permissions granted to each of their groups.",
+                        related_name="user_set",
+                        related_query_name="user",
+                        to="auth.group",
+                        verbose_name="groups",
+                    ),
+                ),
+                (
+                    "user_permissions",
+                    models.ManyToManyField(
+                        blank=True,
+                        help_text="Specific permissions for this user.",
+                        related_name="user_set",
+                        related_query_name="user",
+                        to="auth.permission",
+                        verbose_name="user permissions",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': '사용자',
-                'verbose_name_plural': '사용자',
+                "verbose_name": "사용자",
+                "verbose_name_plural": "사용자",
             },
             managers=[
-                ('objects', django.contrib.auth.models.UserManager()),
+                ("objects", django.contrib.auth.models.UserManager()),
             ],
         ),
         migrations.CreateModel(
-            name='Exam',
+            name="Exam",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=100, verbose_name='시험이름')),
-                ('score', models.PositiveIntegerField(verbose_name='점수')),
-                ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='생성일')),
-                ('updated_at', models.DateTimeField(auto_now=True, verbose_name='수정일')),
-                ('attendance', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='students.attendance', verbose_name='출석')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=100, verbose_name="시험이름")),
+                ("score", models.PositiveIntegerField(verbose_name="점수")),
+                (
+                    "created_at",
+                    models.DateTimeField(auto_now_add=True, verbose_name="생성일"),
+                ),
+                (
+                    "updated_at",
+                    models.DateTimeField(auto_now=True, verbose_name="수정일"),
+                ),
+                (
+                    "attendance",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to="students.attendance",
+                        verbose_name="출석",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': '시험',
-                'verbose_name_plural': '시험',
+                "verbose_name": "시험",
+                "verbose_name_plural": "시험",
             },
         ),
         migrations.CreateModel(
-            name='Student',
+            name="Student",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=100, verbose_name='이름')),
-                ('parent_phone', models.CharField(max_length=15, verbose_name='부모님 전화번호')),
-                ('student_phone', models.CharField(blank=True, max_length=15, null=True, verbose_name='학생 전화번호')),
-                ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='생성일')),
-                ('updated_at', models.DateTimeField(auto_now=True, verbose_name='수정일')),
-                ('class_info', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='students.class', verbose_name='반')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=100, verbose_name="이름")),
+                (
+                    "parent_phone",
+                    models.CharField(max_length=15, verbose_name="부모님 전화번호"),
+                ),
+                (
+                    "student_phone",
+                    models.CharField(
+                        blank=True,
+                        max_length=15,
+                        null=True,
+                        verbose_name="학생 전화번호",
+                    ),
+                ),
+                (
+                    "created_at",
+                    models.DateTimeField(auto_now_add=True, verbose_name="생성일"),
+                ),
+                (
+                    "updated_at",
+                    models.DateTimeField(auto_now=True, verbose_name="수정일"),
+                ),
+                (
+                    "class_info",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to="students.class",
+                        verbose_name="반",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': '학생',
-                'verbose_name_plural': '학생',
+                "verbose_name": "학생",
+                "verbose_name_plural": "학생",
             },
         ),
         migrations.AddField(
-            model_name='attendance',
-            name='student',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='students.student', verbose_name='학생'),
+            model_name="attendance",
+            name="student",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                to="students.student",
+                verbose_name="학생",
+            ),
         ),
     ]

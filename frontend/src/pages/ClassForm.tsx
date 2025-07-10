@@ -18,7 +18,7 @@ import { classAPI } from '../services/api';
 
 interface ClassFormData {
   name: string;
-  subject: 'CHEMISTRY' | 'BIOLOGY' | 'EARTH_SCIENCE';
+  subject: 'CHEMISTRY' | 'BIOLOGY' | 'GEOSCIENCE';
   dayOfWeek: 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY';
   startTime: string;
 }
@@ -166,7 +166,7 @@ const ClassForm: React.FC = () => {
             >
               <MenuItem value="CHEMISTRY">화학</MenuItem>
               <MenuItem value="BIOLOGY">생명</MenuItem>
-              <MenuItem value="EARTH_SCIENCE">지학</MenuItem>
+              <MenuItem value="GEOSCIENCE">지학</MenuItem>
             </Select>
           </FormControl>
 
