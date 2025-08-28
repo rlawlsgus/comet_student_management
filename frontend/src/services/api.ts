@@ -369,3 +369,30 @@ export const dashboardAPI = {
     return apiCall(endpoint);
   },
 };
+
+// 알림톡 전송 관련 API
+export const notificationAPI = {
+  // 개별 알림톡 전송
+  sendSingleNotification: async (studentId: number, attendanceId: number) => {
+    return apiCall("/notifications/", {
+      method: "POST",
+      body: JSON.stringify({
+        type: "single",
+        student_id: studentId,
+        attendance_id: attendanceId,
+      }),
+    });
+  },
+
+  // 일괄 알림톡 전송
+  sendBulkNotification: async (studentIds: number[], targetDate: string) => {
+    return apiCall("/notifications/", {
+      method: "POST",
+      body: JSON.stringify({
+        type: "bulk",
+        student_ids: studentIds,
+        target_date: targetDate,
+      }),
+    });
+  },
+};

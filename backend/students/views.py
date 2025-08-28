@@ -9,6 +9,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from datetime import datetime, timedelta, date
+import requests
 from .models import User, Class, Student, Attendance, Exam
 from .serializers import (
     UserSerializer,
@@ -142,8 +143,40 @@ class UserViewSet(viewsets.ModelViewSet):
                 {"detail": "관리자만 관리자 역할로 변경할 수 있습니다."},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        # 비밀번호 변경 권한 및 처리
+        data = request.data.copy()
+        new_password = data.get("new_password") or data.get("password")
+        if new_password:
+            # 관리자: 모든 사용자 비밀번호 변경 가능
+            # 선생님: 조교(ASSISTANT) 비밀번호만 변경 가능
+            if request.user.role == User.Role.ADMIN or (
+                request.user.role == User.Role.TEACHER
+                and instance.role == User.Role.ASSISTANT
+            ):
+                if len(new_password) < 8:
+                    return Response(
+                        {"detail": "비밀번호는 최소 8자 이상이어야 합니다."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                instance.set_password(new_password)
+                instance.save()
+                # 비밀번호 필드는 직렬화 업데이트에서 제외
+                if "new_password" in data:
+                    data.pop("new_password")
+                if "password" in data:
+                    data.pop("password")
+            else:
+                return Response(
+                    {"detail": "해당 사용자의 비밀번호를 변경할 권한이 없습니다."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
-        return super().update(request, *args, **kwargs)
+        # 나머지 필드 업데이트 실행
+        serializer = self.get_serializer(instance, data=data, partial=False)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def partial_update(self, request, *args, **kwargs):
         """회원 수정"""
@@ -174,8 +207,36 @@ class UserViewSet(viewsets.ModelViewSet):
                 {"detail": "관리자만 관리자 역할로 변경할 수 있습니다."},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        # 비밀번호 변경 권한 및 처리 (부분 수정)
+        data = request.data.copy()
+        new_password = data.get("new_password") or data.get("password")
+        if new_password:
+            if request.user.role == User.Role.ADMIN or (
+                request.user.role == User.Role.TEACHER
+                and instance.role == User.Role.ASSISTANT
+            ):
+                if len(new_password) < 8:
+                    return Response(
+                        {"detail": "비밀번호는 최소 8자 이상이어야 합니다."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                instance.set_password(new_password)
+                instance.save()
+                if "new_password" in data:
+                    data.pop("new_password")
+                if "password" in data:
+                    data.pop("password")
+            else:
+                return Response(
+                    {"detail": "해당 사용자의 비밀번호를 변경할 권한이 없습니다."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
-        return super().partial_update(request, *args, **kwargs)
+        serializer = self.get_serializer(instance, data=data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def destroy(self, request, *args, **kwargs):
         """회원 삭제"""
@@ -319,6 +380,13 @@ class ClassViewSet(viewsets.ModelViewSet):
                     {"detail": "자신의 과목의 반만 생성할 수 있습니다."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
+
+        # 비밀번호 8자 최소 길이 검증
+        if request.data.get("password") and len(request.data.get("password")) < 8:
+            return Response(
+                {"detail": "비밀번호는 최소 8자 이상이어야 합니다."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
@@ -1074,7 +1142,7 @@ class DashboardView(APIView):
                         }
                     )
 
-        # 성적 통계 (선택된 반이 있는 경우) - 최근 한달간의 모든 시험
+        # 성적 통계 (선택된 반이 있는 경우) - 선택된 월의 모든 시험
         grade_stats = []
         if class_id:
             # 관리자는 모든 반의 통계를, 선생님과 조교는 해당 과목의 반만 볼 수 있음
@@ -1082,12 +1150,21 @@ class DashboardView(APIView):
             if selected_class and (
                 user.role == User.Role.ADMIN or selected_class.subject == user.subject
             ):
-                # 최근 한달간의 시험 가져오기
-                one_month_ago = date.today() - timedelta(days=30)
+                # 선택된 월의 첫날과 마지막날 계산 (성적 통계에도 동일 적용)
+                import calendar
 
+                first_day = date(target_month.year, target_month.month, 1)
+                last_day = date(
+                    target_month.year,
+                    target_month.month,
+                    calendar.monthrange(target_month.year, target_month.month)[1],
+                )
+
+                # 선택된 월의 시험 가져오기
                 recent_exams = Exam.objects.filter(
                     attendance__student__class_info_id=class_id,
-                    attendance__date__gte=one_month_ago,
+                    attendance__date__gte=first_day,
+                    attendance__date__lte=last_day,
                 ).order_by("-attendance__date", "-id")
 
                 if recent_exams.exists():
@@ -1118,3 +1195,411 @@ class DashboardView(APIView):
                 "grade_stats": grade_stats,
             }
         )
+
+
+class KakaoNotificationView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        """알림톡 전송 API"""
+        user = request.user
+
+        notification_type = request.data.get("type")  # "single" or "bulk"
+
+        if notification_type == "single":
+            return self._send_single_notification(request, user)
+        elif notification_type == "bulk":
+            return self._send_bulk_notification(request, user)
+        else:
+            return Response(
+                {"detail": "잘못된 전송 타입입니다."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    def _send_single_notification(self, request, user):
+        """개별 알림톡 전송"""
+        student_id = request.data.get("student_id")
+        attendance_id = request.data.get("attendance_id")
+
+        if not student_id or not attendance_id:
+            return Response(
+                {"detail": "학생 ID와 출석 기록 ID가 필요합니다."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            # 학생 정보 조회
+            student = Student.objects.get(id=student_id)
+
+            # 권한 검증
+            if user.role == User.Role.TEACHER or user.role == User.Role.ASSISTANT:
+                if student.class_info.subject != user.subject:
+                    return Response(
+                        {"detail": "해당 학생의 알림톡을 전송할 권한이 없습니다."},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+
+            # 출석 기록 조회
+            attendance = Attendance.objects.get(id=attendance_id, student=student)
+
+            # 관련된 시험 기록들 조회
+            related_exams = Exam.objects.filter(attendance=attendance)
+
+            # 시험별 평균 정보 조회
+            exam_averages = (
+                Exam.objects.filter(
+                    attendance__student__class_info=student.class_info,
+                    name__in=related_exams.values_list("name", flat=True),
+                )
+                .values("name")
+                .annotate(
+                    average_score=Avg("score"),
+                    max_score=Max("score"),
+                    min_score=Min("score"),
+                    count=Count("id"),
+                )
+            )
+
+            # 알림톡 데이터 준비
+            notification_data = {
+                "student_name": student.name,
+                "parent_phone": student.parent_phone,
+                "attendance_date": attendance.date.strftime("%Y-%m-%d"),
+                "class_type": attendance.get_class_type_display(),
+                "content": attendance.content,
+                "is_late": attendance.is_late,
+                "homework_completion": attendance.homework_completion,
+                "homework_accuracy": attendance.homework_accuracy,
+                "related_exams": [],
+                "sender_role": user.get_role_display(),
+                "sender_name": user.name,
+            }
+
+            # 시험 기록에 평균 정보 추가
+            for exam in related_exams:
+                exam_average = next(
+                    (avg for avg in exam_averages if avg["name"] == exam.name), None
+                )
+
+                notification_data["related_exams"].append(
+                    {
+                        "name": exam.name,
+                        "score": exam.score,
+                        "max_score": exam.max_score,
+                        "exam_date": exam.exam_date.strftime("%Y-%m-%d"),
+                        "average_score": (
+                            exam_average["average_score"] if exam_average else 0
+                        ),
+                        "class_average": (
+                            exam_average["average_score"] if exam_average else 0
+                        ),
+                        "class_max_score": (
+                            exam_average["max_score"] if exam_average else 0
+                        ),
+                        "class_min_score": (
+                            exam_average["min_score"] if exam_average else 0
+                        ),
+                        "class_count": exam_average["count"] if exam_average else 0,
+                    }
+                )
+
+            # TODO: BizTalk 알림톡 API 호출
+            success = self._send_biztalk_notification(notification_data)
+
+            if success:
+                return Response(
+                    {
+                        "message": f"{student.name} 학생의 알림톡이 성공적으로 전송되었습니다.",
+                        "notification_data": notification_data,
+                    },
+                    status=status.HTTP_200_OK,
+                )
+            else:
+                return Response(
+                    {"detail": "알림톡 전송에 실패했습니다."},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+        except Student.DoesNotExist:
+            return Response(
+                {"detail": "존재하지 않는 학생입니다."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Attendance.DoesNotExist:
+            return Response(
+                {"detail": "존재하지 않는 출석 기록입니다."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exception as e:
+            return Response(
+                {"detail": f"알림톡 전송 중 오류가 발생했습니다: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    def _send_bulk_notification(self, request, user):
+        """일괄 알림톡 전송"""
+        student_ids = request.data.get("student_ids", [])
+        target_date = request.data.get("target_date")  # "YYYY-MM-DD" 형식
+
+        if not student_ids or not target_date:
+            return Response(
+                {"detail": "학생 ID 목록과 대상 날짜가 필요합니다."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            # 학생들 조회
+            students = Student.objects.filter(id__in=student_ids)
+
+            # 권한 검증
+            if user.role == User.Role.TEACHER or user.role == User.Role.ASSISTANT:
+                students = students.filter(class_info__subject=user.subject)
+
+            if not students.exists():
+                return Response(
+                    {"detail": "전송할 학생이 없습니다."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # 각 학생의 해당 날짜 출석 기록 조회
+            bulk_notifications = []
+            for student in students:
+                try:
+                    attendance = Attendance.objects.get(
+                        student=student, date=target_date
+                    )
+
+                    # 관련된 시험 기록들 조회
+                    related_exams = Exam.objects.filter(attendance=attendance)
+
+                    # 시험별 평균 정보 조회
+                    exam_averages = (
+                        Exam.objects.filter(
+                            attendance__student__class_info=student.class_info,
+                            name__in=related_exams.values_list("name", flat=True),
+                        )
+                        .values("name")
+                        .annotate(
+                            average_score=Avg("score"),
+                            max_score=Max("score"),
+                            min_score=Min("score"),
+                            count=Count("id"),
+                        )
+                    )
+
+                    # 알림톡 데이터 준비
+                    notification_data = {
+                        "student_name": student.name,
+                        "parent_phone": student.parent_phone,
+                        "attendance_date": attendance.date.strftime("%Y-%m-%d"),
+                        "class_type": attendance.get_class_type_display(),
+                        "content": attendance.content,
+                        "is_late": attendance.is_late,
+                        "homework_completion": attendance.homework_completion,
+                        "homework_accuracy": attendance.homework_accuracy,
+                        "related_exams": [],
+                        "sender_role": user.get_role_display(),
+                        "sender_name": user.name,
+                    }
+
+                    # 시험 기록에 평균 정보 추가
+                    for exam in related_exams:
+                        exam_average = next(
+                            (avg for avg in exam_averages if avg["name"] == exam.name),
+                            None,
+                        )
+
+                        notification_data["related_exams"].append(
+                            {
+                                "name": exam.name,
+                                "score": exam.score,
+                                "max_score": exam.max_score,
+                                "exam_date": exam.exam_date.strftime("%Y-%m-%d"),
+                                "average_score": (
+                                    exam_average["average_score"] if exam_average else 0
+                                ),
+                                "class_average": (
+                                    exam_average["average_score"] if exam_average else 0
+                                ),
+                                "class_max_score": (
+                                    exam_average["max_score"] if exam_average else 0
+                                ),
+                                "class_min_score": (
+                                    exam_average["min_score"] if exam_average else 0
+                                ),
+                                "class_count": (
+                                    exam_average["count"] if exam_average else 0
+                                ),
+                            }
+                        )
+
+                    bulk_notifications.append(notification_data)
+
+                except Attendance.DoesNotExist:
+                    # 해당 날짜에 출석 기록이 없는 경우 스킵
+                    continue
+
+            if not bulk_notifications:
+                return Response(
+                    {"detail": "전송할 출석 기록이 없습니다."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # TODO: BizTalk 일괄 알림톡 API 호출
+            success_count = self._send_biztalk_bulk_notification(bulk_notifications)
+
+            return Response(
+                {
+                    "message": f"{success_count}명의 학생에게 알림톡이 성공적으로 전송되었습니다.",
+                    "total_count": len(bulk_notifications),
+                    "success_count": success_count,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except Exception as e:
+            return Response(
+                {"detail": f"일괄 알림톡 전송 중 오류가 발생했습니다: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    def _send_biztalk_notification(self, notification_data):
+        """
+        BizTalk 알림톡 API 호출 (개별 전송)
+        TODO: 실제 BizTalk API 연동 구현
+        """
+        try:
+            # TODO: BizTalk API 설정
+            # api_key = settings.BIZTALK_API_KEY
+            # api_secret = settings.BIZTALK_API_SECRET
+            # api_url = settings.BIZTALK_API_URL
+
+            # 알림톡 템플릿 ID
+            template_id = "attendance_notification_template"
+
+            # 수신자 정보
+            recipient = {
+                "phone": notification_data["parent_phone"],
+                "name": notification_data["student_name"],
+            }
+
+            # 템플릿 변수
+            template_variables = {
+                "student_name": notification_data["student_name"],
+                "attendance_date": notification_data["attendance_date"],
+                "class_type": notification_data["class_type"],
+                "content": notification_data["content"],
+                "is_late": "지각" if notification_data["is_late"] else "정시",
+                "homework_completion": f"{notification_data['homework_completion']}%",
+                "homework_accuracy": f"{notification_data['homework_accuracy']}%",
+                "sender_name": notification_data["sender_name"],
+                "sender_role": notification_data["sender_role"],
+            }
+
+            # 시험 정보 추가
+            if notification_data["related_exams"]:
+                exam_info = []
+                for exam in notification_data["related_exams"]:
+                    exam_info.append(
+                        f"{exam['name']}: {exam['score']}/{exam['max_score']}점 "
+                        f"(반평균: {int(exam['class_average'])}/{exam['max_score']}점)"
+                    )
+                template_variables["exam_info"] = "\n".join(exam_info)
+            else:
+                template_variables["exam_info"] = "관련 시험 기록이 없습니다."
+
+            # TODO: 실제 API 호출
+            # response = requests.post(
+            #     f"{api_url}/send",
+            #     headers={
+            #         "Authorization": f"Bearer {api_key}",
+            #         "Content-Type": "application/json"
+            #     },
+            #     json={
+            #         "template_id": template_id,
+            #         "recipient": recipient,
+            #         "variables": template_variables
+            #     }
+            # )
+
+            # 임시로 성공 반환
+            print(
+                f"BizTalk 알림톡 전송: {notification_data['student_name']} -> {notification_data['parent_phone']}"
+            )
+            return True
+
+        except Exception as e:
+            print(f"BizTalk 알림톡 전송 실패: {str(e)}")
+            return False
+
+    def _send_biztalk_bulk_notification(self, bulk_notifications):
+        """
+        BizTalk 알림톡 API 호출 (일괄 전송)
+        TODO: 실제 BizTalk API 연동 구현
+        """
+        try:
+            # TODO: BizTalk API 설정
+            # api_key = settings.BIZTALK_API_KEY
+            # api_secret = settings.BIZTALK_API_SECRET
+            # api_url = settings.BIZTALK_API_URL
+
+            # 알림톡 템플릿 ID
+            template_id = "attendance_notification_template"
+
+            # 수신자 목록
+            recipients = []
+            for notification in bulk_notifications:
+                recipients.append(
+                    {
+                        "phone": notification["parent_phone"],
+                        "name": notification["student_name"],
+                        "variables": {
+                            "student_name": notification["student_name"],
+                            "attendance_date": notification["attendance_date"],
+                            "class_type": notification["class_type"],
+                            "content": notification["content"],
+                            "is_late": "지각" if notification["is_late"] else "정시",
+                            "homework_completion": f"{notification['homework_completion']}%",
+                            "homework_accuracy": f"{notification['homework_accuracy']}%",
+                            "sender_name": notification["sender_name"],
+                            "sender_role": notification["sender_role"],
+                            "exam_info": self._format_exam_info(
+                                notification["related_exams"]
+                            ),
+                        },
+                    }
+                )
+
+            # TODO: 실제 API 호출
+            # response = requests.post(
+            #     f"{api_url}/send_bulk",
+            #     headers={
+            #         "Authorization": f"Bearer {api_key}",
+            #         "Content-Type": "application/json"
+            #     },
+            #     json={
+            #         "template_id": template_id,
+            #         "recipients": recipients
+            #     }
+            # )
+
+            # 임시로 성공 반환
+            print(f"BizTalk 일괄 알림톡 전송: {len(bulk_notifications)}건")
+            return len(bulk_notifications)
+
+        except Exception as e:
+            print(f"BizTalk 일괄 알림톡 전송 실패: {str(e)}")
+            return 0
+
+    def _format_exam_info(self, related_exams):
+        """시험 정보를 텍스트로 포맷팅"""
+        if not related_exams:
+            return "관련 시험 기록이 없습니다."
+
+        exam_info = []
+        for exam in related_exams:
+            exam_info.append(
+                f"{exam['name']}: {exam['score']}/{exam['max_score']}점 "
+                f"(반평균: {int(exam['class_average'])}/{exam['max_score']}점)"
+            )
+        return "\n".join(exam_info)

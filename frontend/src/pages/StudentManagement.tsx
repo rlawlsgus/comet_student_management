@@ -35,7 +35,7 @@ import { format } from 'date-fns';
 import { useParams, useNavigate } from 'react-router-dom';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SendIcon from '@mui/icons-material/Send';
-import { studentAPI, attendanceAPI, examAPI } from '../services/api';
+import { studentAPI, attendanceAPI, examAPI, notificationAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
 interface Student {
@@ -326,47 +326,13 @@ const StudentManagement: React.FC = () => {
     try {
       setError('');
       const selectedAttendanceId = selectedAttendances[0];
-      const selectedAttendance = attendances.find(att => att.id === selectedAttendanceId);
       
-      if (!selectedAttendance) {
-        throw new Error('선택된 출석 기록을 찾을 수 없습니다.');
-      }
-
-      // 선택된 출석 기록과 연관된 시험 기록들 찾기
-      const relatedExams = exams.filter(exam => exam.attendance === selectedAttendanceId);
-
-      // 카카오톡 알림톡 전송을 위한 데이터 준비
-      const notificationData = {
-        student_name: student.name,
-        parent_phone: student.parent_phone,
-        attendance_date: selectedAttendance.date,
-        class_type: selectedAttendance.class_type_display,
-        content: selectedAttendance.content,
-        is_late: selectedAttendance.is_late,
-        homework_completion: selectedAttendance.homework_completion,
-        homework_accuracy: selectedAttendance.homework_accuracy,
-        related_exams: relatedExams.map(exam => {
-          const examAverage = examAverages.find(avg => avg.name === exam.name);
-          return {
-            name: exam.name,
-            score: exam.score,
-            max_score: exam.max_score,
-            exam_date: exam.exam_date,
-            average_score: examAverage?.average_score || 0,
-            class_average: examAverage?.average_score || 0,
-          };
-        }),
-        sender_role: currentUser?.role,
-        sender_name: currentUser?.name,
-      };
-
-      // TODO: 실제 카카오톡 알림톡 API 호출
-      console.log('카카오톡 알림톡 전송 데이터:', notificationData);
+      // 백엔드 API 호출
+      const response = await notificationAPI.sendSingleNotification(student.id, selectedAttendanceId);
       
-      // 임시 구현: 성공 메시지 표시
       setSnackbar({
         open: true,
-        message: `${student.name} 학생의 ${selectedAttendance.date} 출석 기록이 학부모님께 전송되었습니다.`,
+        message: response.message || `${student.name} 학생의 출석 기록이 학부모님께 전송되었습니다.`,
         severity: 'success',
       });
 

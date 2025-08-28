@@ -40,7 +40,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { studentAPI, classAPI, attendanceAPI, examAPI } from '../services/api';
+import { studentAPI, classAPI, attendanceAPI, examAPI, notificationAPI } from '../services/api';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -421,12 +421,15 @@ const StudentList: React.FC = () => {
     try {
       setError('');
       
-      // TODO: 실제 카카오톡 알림톡 API 호출
-      console.log('일괄 카카오톡 알림톡 전송 데이터:', sendTargets);
+      // 백엔드 API 호출
+      const studentIds = sendTargets.map(target => target.student.id);
+      const today = format(new Date(), 'yyyy-MM-dd');
+      
+      const response = await notificationAPI.sendBulkNotification(studentIds, today);
       
       setSnackbar({
         open: true,
-        message: `${sendTargets.length}명의 학생에게 알림톡이 전송되었습니다.`,
+        message: response.message || `${response.success_count || sendTargets.length}명의 학생에게 알림톡이 전송되었습니다.`,
         severity: 'success',
       });
 

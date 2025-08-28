@@ -14,4 +14,5 @@ urlpatterns = [
     path("login/", views.LoginView.as_view(), name="login"),
     path("logout/", views.LogoutView.as_view(), name="logout"),
     path("dashboard/", views.DashboardView.as_view(), name="dashboard"),
+    path("notifications/", views.KakaoNotificationView.as_view(), name="notifications"),
 ]

@@ -29,6 +29,7 @@ const UserEdit: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { user: currentUser } = useAuth();
+  const [newPassword, setNewPassword] = useState<string>('');
   const [user, setUser] = useState<User>({
     id: 0,
     username: '',
@@ -79,11 +80,24 @@ const UserEdit: React.FC = () => {
     setLoading(true);
 
     try {
-      await userAPI.updateUser(user.id, {
+      const canChangePassword =
+        (currentUser?.role === 'ADMIN') ||
+        (currentUser?.role === 'TEACHER' && user.role === 'ASSISTANT');
+
+      const payload: any = {
         name: user.name,
         role: user.role,
         subject: user.subject,
-      });
+      };
+
+      if (canChangePassword && newPassword.trim().length > 0) {
+        if (newPassword.trim().length < 8) {
+          throw new Error('비밀번호는 최소 8자 이상이어야 합니다.');
+        }
+        payload.new_password = newPassword.trim();
+      }
+
+      await userAPI.updateUser(user.id, payload);
       navigate('/users'); // 회원 목록 페이지로 이동
     } catch (err: any) {
       // 백엔드에서 오는 에러 메시지 처리
@@ -181,6 +195,21 @@ const UserEdit: React.FC = () => {
               <MenuItem value="GEOSCIENCE">지학</MenuItem>
             </Select>
           </FormControl>
+
+          {/* 비밀번호 변경 (권한 조건: 관리자, 또는 선생님이 조교 수정 시) */}
+          {((currentUser?.role === 'ADMIN') || (currentUser?.role === 'TEACHER' && user.role === 'ASSISTANT')) && (
+            <TextField
+              fullWidth
+              label="새 비밀번호 (선택)"
+              name="new_password"
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              margin="normal"
+              helperText="최소 8자 이상 입력하세요. 비워두면 비밀번호는 변경되지 않습니다."
+              disabled={loading}
+            />
+          )}
 
           <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
             <Button

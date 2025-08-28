@@ -66,8 +66,8 @@ const Dashboard: React.FC = () => {
   const handleClassSelect = async (classId: number) => {
     setSelectedClassId(classId);
     setSelectedStudent(null);
-    setSelectedMonth(new Date()); // 반 선택 시 현재 월로 초기화
-    await loadDashboardData(classId, new Date());
+    // 현재 선택된 달을 유지하여 해당 달의 통계를 로드
+    await loadDashboardData(classId, selectedMonth);
   };
 
   const handleStudentSelect = async (student: any) => {
