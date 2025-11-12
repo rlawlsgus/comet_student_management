@@ -103,12 +103,41 @@ class Attendance(models.Model):
 
 
 class Exam(models.Model):
+    class Category(models.TextChoices):
+        REVIEW = "REVIEW", _("복습테스트")
+        ESSAY = "ESSAY", _("서술테스트")
+        ORAL = "ORAL", _("구술테스트")
+        MOCK = "MOCK", _("모의고사")
+        SCHOOL = "SCHOOL", _("학교기출")
+
+    class Grade(models.TextChoices):
+        A_PLUS = "A+", "A+"
+        A = "A", "A"
+        A_MINUS = "A-", "A-"
+        B_PLUS = "B+", "B+"
+        B = "B", "B"
+        B_MINUS = "B-", "B-"
+        C_PLUS = "C+", "C+"
+        C = "C", "C"
+        C_MINUS = "C-", "C-"
+        D = "D", "D"
+        F = "F", "F"
+
     attendance = models.ForeignKey(
         Attendance, on_delete=models.CASCADE, verbose_name="출석"
     )
     name = models.CharField(max_length=100, verbose_name="시험이름")
-    score = models.PositiveIntegerField(verbose_name="점수")
-    max_score = models.PositiveIntegerField(verbose_name="만점", default=100)
+    category = models.CharField(
+        max_length=10,
+        choices=Category.choices,
+        default=Category.REVIEW,
+        verbose_name="시험종류",
+    )
+    score = models.PositiveIntegerField(null=True, blank=True, verbose_name="점수")
+    max_score = models.PositiveIntegerField(null=True, blank=True, verbose_name="만점")
+    grade = models.CharField(
+        max_length=2, choices=Grade.choices, null=True, blank=True, verbose_name="등급"
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="생성일")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="수정일")
 
@@ -118,3 +147,26 @@ class Exam(models.Model):
 
     def __str__(self):
         return f"{self.attendance.student.name} - {self.name} ({self.score}점)"
+
+    def clean(self):
+        super().clean()
+        if self.category in [self.Category.REVIEW, self.Category.SCHOOL]:
+            if self.score is None or self.max_score is None:
+                raise ValueError("점수와 만점은 필수입니다.")
+            if self.grade is not None:
+                raise ValueError("점수 기반 시험에는 등급을 입력할 수 없습니다.")
+        elif self.category in [self.Category.ESSAY, self.Category.ORAL]:
+            if self.grade is None:
+                raise ValueError("등급은 필수입니다.")
+            if self.score is not None or self.max_score is not None:
+                raise ValueError("등급 기반 시험에는 점수나 만점을 입력할 수 없습니다.")
+        elif self.category == self.Category.MOCK:
+            if self.score is None:
+                raise ValueError("점수는 필수입니다.")
+            self.max_score = 50
+            if self.grade is not None:
+                raise ValueError("모의고사에는 등급을 입력할 수 없습니다.")
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)

@@ -381,13 +381,6 @@ class ClassViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
-        # 비밀번호 8자 최소 길이 검증
-        if request.data.get("password") and len(request.data.get("password")) < 8:
-            return Response(
-                {"detail": "비밀번호는 최소 8자 이상이어야 합니다."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -704,84 +697,6 @@ class StudentViewSet(viewsets.ModelViewSet):
         )
         serializer = ExamSerializer(exams, many=True)
         return Response(serializer.data)
-
-    @action(detail=True, methods=["post"])
-    def add_attendance(self, request, pk=None):
-        """학생의 출석 기록 추가"""
-        student = self.get_object()
-
-        # 조교는 출석 기록 추가 불가
-        if request.user.role == User.Role.ASSISTANT:
-            return Response(
-                {"detail": "조교는 출석 기록을 추가할 수 없습니다."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        # 권한 검증
-        user = request.user
-        if user.role == User.Role.TEACHER:
-            if student.class_info.subject != user.subject:
-                return Response(
-                    {"detail": "해당 학생의 출석 기록을 추가할 권한이 없습니다."},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-
-        # 출석 기록 데이터에 학생 ID 추가
-        attendance_data = request.data.copy()
-        attendance_data["student"] = student.id
-
-        serializer = AttendanceSerializer(data=attendance_data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    @action(detail=True, methods=["post"])
-    def add_exam(self, request, pk=None):
-        """학생의 시험 기록 추가"""
-        student = self.get_object()
-
-        # 조교는 시험 기록 추가 불가
-        if request.user.role == User.Role.ASSISTANT:
-            return Response(
-                {"detail": "조교는 시험 기록을 추가할 수 없습니다."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        # 권한 검증
-        user = request.user
-        if user.role == User.Role.TEACHER:
-            if student.class_info.subject != user.subject:
-                return Response(
-                    {"detail": "해당 학생의 시험 기록을 추가할 권한이 없습니다."},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-
-        # 시험 기록 데이터에 출석 기록 ID 추가
-        exam_data = request.data.copy()
-
-        # 출석 기록이 필요하므로 먼저 생성하거나 기존 출석 기록을 사용
-        attendance_id = exam_data.get("attendance")
-        if not attendance_id:
-            return Response(
-                {"detail": "시험 기록을 추가하려면 출석 기록이 필요합니다."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # 출석 기록이 해당 학생의 것인지 확인
-        try:
-            attendance = Attendance.objects.get(id=attendance_id, student=student)
-        except Attendance.DoesNotExist:
-            return Response(
-                {"detail": "해당 학생의 출석 기록을 찾을 수 없습니다."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        serializer = ExamSerializer(data=exam_data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class AttendanceViewSet(viewsets.ModelViewSet):
@@ -1286,7 +1201,7 @@ class KakaoNotificationView(APIView):
                         "name": exam.name,
                         "score": exam.score,
                         "max_score": exam.max_score,
-                        "exam_date": exam.exam_date.strftime("%Y-%m-%d"),
+                        "exam_date": exam.attendance.date.strftime("%Y-%m-%d"),
                         "average_score": (
                             exam_average["average_score"] if exam_average else 0
                         ),
@@ -1303,8 +1218,8 @@ class KakaoNotificationView(APIView):
                     }
                 )
 
-            # TODO: BizTalk 알림톡 API 호출
-            success = self._send_biztalk_notification(notification_data)
+            # TODO: BizM 알림톡 API 호출
+            success = self._send_bizM_notification(notification_data)
 
             if success:
                 return Response(
@@ -1414,7 +1329,7 @@ class KakaoNotificationView(APIView):
                                 "name": exam.name,
                                 "score": exam.score,
                                 "max_score": exam.max_score,
-                                "exam_date": exam.exam_date.strftime("%Y-%m-%d"),
+                                "exam_date": exam.attendance.date.strftime("%Y-%m-%d"),
                                 "average_score": (
                                     exam_average["average_score"] if exam_average else 0
                                 ),
@@ -1445,8 +1360,8 @@ class KakaoNotificationView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # TODO: BizTalk 일괄 알림톡 API 호출
-            success_count = self._send_biztalk_bulk_notification(bulk_notifications)
+            # TODO: BizM 일괄 알림톡 API 호출
+            success_count = self._send_bizM_bulk_notification(bulk_notifications)
 
             return Response(
                 {
@@ -1463,16 +1378,16 @@ class KakaoNotificationView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    def _send_biztalk_notification(self, notification_data):
+    def _send_bizM_notification(self, notification_data):
         """
-        BizTalk 알림톡 API 호출 (개별 전송)
-        TODO: 실제 BizTalk API 연동 구현
+        BizM 알림톡 API 호출 (개별 전송)
+        TODO: 실제 BizM API 연동 구현
         """
         try:
-            # TODO: BizTalk API 설정
-            # api_key = settings.BIZTALK_API_KEY
-            # api_secret = settings.BIZTALK_API_SECRET
-            # api_url = settings.BIZTALK_API_URL
+            # TODO: BizM API 설정
+            # api_key = settings.BIZM_API_KEY
+            # api_secret = settings.BIZM_API_SECRET
+            # api_url = settings.BIZM_API_URL
 
             # 알림톡 템플릿 ID
             template_id = "attendance_notification_template"
@@ -1502,7 +1417,7 @@ class KakaoNotificationView(APIView):
                 for exam in notification_data["related_exams"]:
                     exam_info.append(
                         f"{exam['name']}: {exam['score']}/{exam['max_score']}점 "
-                        f"(반평균: {int(exam['class_average'])}/{exam['max_score']}점)"
+                        f"(반평균: {int(exam.get('class_average') or 0)}/{exam['max_score']}점)"
                     )
                 template_variables["exam_info"] = "\n".join(exam_info)
             else:
@@ -1524,24 +1439,24 @@ class KakaoNotificationView(APIView):
 
             # 임시로 성공 반환
             print(
-                f"BizTalk 알림톡 전송: {notification_data['student_name']} -> {notification_data['parent_phone']}"
+                f"BizM 알림톡 전송: {notification_data['student_name']} -> {notification_data['parent_phone']}"
             )
             return True
 
         except Exception as e:
-            print(f"BizTalk 알림톡 전송 실패: {str(e)}")
+            print(f"BizM 알림톡 전송 실패: {str(e)}")
             return False
 
-    def _send_biztalk_bulk_notification(self, bulk_notifications):
+    def _send_bizM_bulk_notification(self, bulk_notifications):
         """
-        BizTalk 알림톡 API 호출 (일괄 전송)
-        TODO: 실제 BizTalk API 연동 구현
+        BizM 알림톡 API 호출 (일괄 전송)
+        TODO: 실제 BizM API 연동 구현
         """
         try:
-            # TODO: BizTalk API 설정
-            # api_key = settings.BIZTALK_API_KEY
-            # api_secret = settings.BIZTALK_API_SECRET
-            # api_url = settings.BIZTALK_API_URL
+            # TODO: BizM API 설정
+            # api_key = settings.BIZM_API_KEY
+            # api_secret = settings.BIZM_API_SECRET
+            # api_url = settings.BIZM_API_URL
 
             # 알림톡 템플릿 ID
             template_id = "attendance_notification_template"
@@ -1584,11 +1499,11 @@ class KakaoNotificationView(APIView):
             # )
 
             # 임시로 성공 반환
-            print(f"BizTalk 일괄 알림톡 전송: {len(bulk_notifications)}건")
+            print(f"BizM 일괄 알림톡 전송: {len(bulk_notifications)}건")
             return len(bulk_notifications)
 
         except Exception as e:
-            print(f"BizTalk 일괄 알림톡 전송 실패: {str(e)}")
+            print(f"BizM 일괄 알림톡 전송 실패: {str(e)}")
             return 0
 
     def _format_exam_info(self, related_exams):
@@ -1600,6 +1515,6 @@ class KakaoNotificationView(APIView):
         for exam in related_exams:
             exam_info.append(
                 f"{exam['name']}: {exam['score']}/{exam['max_score']}점 "
-                f"(반평균: {int(exam['class_average'])}/{exam['max_score']}점)"
+                f"(반평균: {int(exam.get('class_average') or 0)}/{exam['max_score']}점)"
             )
         return "\n".join(exam_info)

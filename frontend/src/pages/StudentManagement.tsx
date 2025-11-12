@@ -60,8 +60,11 @@ interface Attendance {
 interface Exam {
   id: number;
   name: string;
-  score: number;
-  max_score: number;
+  category: string;
+  category_display: string;
+  score?: number;
+  max_score?: number;
+  grade?: string;
   exam_date: string;
   attendance: number;
 }
@@ -106,8 +109,10 @@ const StudentManagement: React.FC = () => {
   });
   const [newExam, setNewExam] = useState({
     name: '',
+    category: 'REVIEW',
     score: 0,
     max_score: 100,
+    grade: 'A',
     attendance: null as number | null,
   });
 
@@ -188,25 +193,34 @@ const StudentManagement: React.FC = () => {
   const handleExamSubmit = async () => {
     if (!student) return;
 
-    // 유효성 검사
-    if (newExam.score < 0 || newExam.score > newExam.max_score) {
-      setError(`점수는 0에서 ${newExam.max_score} 사이여야 합니다.`);
-      return;
-    }
+    const { category, name, score, max_score, grade, attendance } = newExam;
 
-    if (!newExam.attendance) {
+    if (!attendance) {
       setError('출석 기록을 선택해주세요.');
       return;
     }
 
+    let examData: any = { name, category, attendance };
+
+    if (category === 'REVIEW' || category === 'SCHOOL') {
+      if (score < 0 || score > max_score) {
+        setError(`점수는 0에서 ${max_score} 사이여야 합니다.`);
+        return;
+      }
+      examData = { ...examData, score, max_score };
+    } else if (category === 'ESSAY' || category === 'ORAL') {
+      examData = { ...examData, grade };
+    } else if (category === 'MOCK') {
+      if (score < 0 || score > 50) {
+        setError('점수는 0에서 50 사이여야 합니다.');
+        return;
+      }
+      examData = { ...examData, score, max_score: 50 };
+    }
+
     try {
       setError('');
-      await examAPI.createExam({
-        name: newExam.name,
-        score: newExam.score,
-        max_score: newExam.max_score,
-        attendance: newExam.attendance,
-      });
+      await examAPI.createExam(examData);
 
       setOpenExamDialog(false);
       fetchStudentData(student.id);
@@ -214,8 +228,10 @@ const StudentManagement: React.FC = () => {
       // 폼 초기화
       setNewExam({
         name: '',
+        category: 'REVIEW',
         score: 0,
         max_score: 100,
+        grade: 'A',
         attendance: null,
       });
     } catch (error: any) {
@@ -313,31 +329,39 @@ const StudentManagement: React.FC = () => {
       });
       return;
     }
-
-    if (selectedAttendances.length > 1) {
-      setSnackbar({
-        open: true,
-        message: '한 번에 하나의 출석 기록만 전송할 수 있습니다.',
-        severity: 'error',
-      });
-      return;
-    }
-
+  
     try {
       setError('');
-      const selectedAttendanceId = selectedAttendances[0];
       
-      // 백엔드 API 호출
-      const response = await notificationAPI.sendSingleNotification(student.id, selectedAttendanceId);
+      const promises = selectedAttendances.map(attendanceId => 
+        notificationAPI.sendSingleNotification(student.id, attendanceId)
+      );
       
+      const results = await Promise.allSettled(promises);
+      
+      const successfulSends = results.filter(result => result.status === 'fulfilled').length;
+      const failedSends = results.filter(result => result.status === 'rejected').length;
+  
+      let message = '';
+      if (successfulSends > 0) {
+        message += `${successfulSends}개의 알림톡 전송에 성공했습니다. `;
+      }
+      if (failedSends > 0) {
+        message += `${failedSends}개의 알림톡 전송에 실패했습니다.`;
+      }
+  
       setSnackbar({
         open: true,
-        message: response.message || `${student.name} 학생의 출석 기록이 학부모님께 전송되었습니다.`,
-        severity: 'success',
+        message: message || '알림톡 전송이 완료되었습니다.',
+        severity: failedSends > 0 ? 'error' : 'success',
       });
-
+  
       setOpenSendDialog(false);
       setSelectedAttendances([]);
+      // 성공한 항목만 목록에서 제거하거나, 전체 목록을 새로고침 할 수 있습니다.
+      // 여기서는 전체 데이터를 새로고침합니다.
+      fetchStudentData(student.id);
+  
     } catch (error: any) {
       console.error('Error sending kakao notification:', error);
       setSnackbar({
@@ -357,16 +381,6 @@ const StudentManagement: React.FC = () => {
       });
       return;
     }
-
-    if (selectedAttendances.length > 1) {
-      setSnackbar({
-        open: true,
-        message: '한 번에 하나의 출석 기록만 전송할 수 있습니다.',
-        severity: 'error',
-      });
-      return;
-    }
-
     setOpenSendDialog(true);
   };
 
@@ -394,7 +408,7 @@ const StudentManagement: React.FC = () => {
             color="primary"
             startIcon={<SendIcon />}
             onClick={handleSendButtonClick}
-            disabled={selectedAttendances.length !== 1}
+            disabled={selectedAttendances.length === 0}
           >
             전송하기
           </Button>
@@ -515,8 +529,8 @@ const StudentManagement: React.FC = () => {
                       />
                     </TableCell>
                     <TableCell>시험 이름</TableCell>
-                    <TableCell>점수</TableCell>
-                    <TableCell>만점</TableCell>
+                    <TableCell>시험 종류</TableCell>
+                    <TableCell>결과</TableCell>
                     <TableCell>시험 날짜</TableCell>
                   </TableRow>
                 </TableHead>
@@ -530,8 +544,10 @@ const StudentManagement: React.FC = () => {
                         />
                       </TableCell>
                       <TableCell>{exam.name}</TableCell>
-                      <TableCell>{exam.score}</TableCell>
-                      <TableCell>{exam.max_score}</TableCell>
+                      <TableCell>{exam.category_display}</TableCell>
+                      <TableCell>
+                        {exam.grade ? exam.grade : `${exam.score}/${exam.max_score}`}
+                      </TableCell>
                       <TableCell>{exam.exam_date}</TableCell>
                     </TableRow>
                   ))}
@@ -632,9 +648,24 @@ const StudentManagement: React.FC = () => {
       </Dialog>
 
       {/* 시험 기록 추가 다이얼로그 */}
-      <Dialog open={openExamDialog} onClose={() => setOpenExamDialog(false)}>
+      <Dialog open={openExamDialog} onClose={() => setOpenExamDialog(false)} sx={{ '& .MuiDialog-paper': { width: '500px' } }}>
         <DialogTitle>시험 기록 추가</DialogTitle>
         <DialogContent>
+          <FormControl fullWidth sx={{ mt: 2, mb: 2 }}>
+            <InputLabel id="exam-category-label">시험 종류</InputLabel>
+            <Select
+              labelId="exam-category-label"
+              value={newExam.category}
+              label="시험 종류"
+              onChange={(e) => setNewExam({ ...newExam, category: e.target.value })}
+            >
+              <MenuItem value="REVIEW">복습테스트</MenuItem>
+              <MenuItem value="ESSAY">서술테스트</MenuItem>
+              <MenuItem value="ORAL">구술테스트</MenuItem>
+              <MenuItem value="MOCK">모의고사</MenuItem>
+              <MenuItem value="SCHOOL">학교기출</MenuItem>
+            </Select>
+          </FormControl>
           <TextField
             fullWidth
             label="시험 이름"
@@ -642,34 +673,90 @@ const StudentManagement: React.FC = () => {
             onChange={(e) => setNewExam({ ...newExam, name: e.target.value })}
             sx={{ mb: 2 }}
           />
-          <TextField
-            fullWidth
-            type="number"
-            label="만점"
-            value={newExam.max_score}
-            onChange={(e) => {
-              const value = Number(e.target.value);
-              if (value > 0) {
-                setNewExam({ ...newExam, max_score: value });
-              }
-            }}
-            inputProps={{ min: 1 }}
-            sx={{ mb: 2 }}
-          />
-          <TextField
-            fullWidth
-            type="number"
-            label="점수"
-            value={newExam.score}
-            onChange={(e) => {
-              const value = Number(e.target.value);
-              if (value >= 0 && value <= newExam.max_score) {
-                setNewExam({ ...newExam, score: value });
-              }
-            }}
-            inputProps={{ min: 0, max: newExam.max_score }}
-            sx={{ mb: 2 }}
-          />
+
+          {(newExam.category === 'REVIEW' || newExam.category === 'SCHOOL') && (
+            <>
+              <TextField
+                fullWidth
+                type="number"
+                label="만점"
+                value={newExam.max_score}
+                onChange={(e) => {
+                  const value = Number(e.target.value);
+                  if (value > 0) {
+                    setNewExam({ ...newExam, max_score: value });
+                  }
+                }}
+                inputProps={{ min: 1 }}
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                fullWidth
+                type="number"
+                label="점수"
+                value={newExam.score}
+                onChange={(e) => {
+                  const value = Number(e.target.value);
+                  if (value >= 0 && value <= newExam.max_score) {
+                    setNewExam({ ...newExam, score: value });
+                  }
+                }}
+                inputProps={{ min: 0, max: newExam.max_score }}
+                sx={{ mb: 2 }}
+              />
+            </>
+          )}
+
+          {newExam.category === 'MOCK' && (
+            <>
+              <TextField
+                fullWidth
+                type="number"
+                label="만점"
+                value={50}
+                disabled
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                fullWidth
+                type="number"
+                label="점수"
+                value={newExam.score}
+                onChange={(e) => {
+                  const value = Number(e.target.value);
+                  if (value >= 0 && value <= 50) {
+                    setNewExam({ ...newExam, score: value });
+                  }
+                }}
+                inputProps={{ min: 0, max: 50 }}
+                sx={{ mb: 2 }}
+              />
+            </>
+          )}
+
+          {(newExam.category === 'ESSAY' || newExam.category === 'ORAL') && (
+            <FormControl fullWidth sx={{ mb: 2 }}>
+              <InputLabel id="exam-grade-label">등급</InputLabel>
+              <Select
+                labelId="exam-grade-label"
+                value={newExam.grade}
+                label="등급"
+                onChange={(e) => setNewExam({ ...newExam, grade: e.target.value })}
+              >
+                <MenuItem value="A+">A+</MenuItem>
+                <MenuItem value="A">A</MenuItem>
+                <MenuItem value="A-">A-</MenuItem>
+                <MenuItem value="B+">B+</MenuItem>
+                <MenuItem value="B">B</MenuItem>
+                <MenuItem value="B-">B-</MenuItem>
+                <MenuItem value="C+">C+</MenuItem>
+                <MenuItem value="C">C</MenuItem>
+                <MenuItem value="C-">C-</MenuItem>
+                <MenuItem value="D">D</MenuItem>
+                <MenuItem value="F">F</MenuItem>
+              </Select>
+            </FormControl>
+          )}
           
           <FormControl fullWidth>
             <InputLabel id="attendance-label">출석 기록 선택</InputLabel>
@@ -769,7 +856,7 @@ const StudentManagement: React.FC = () => {
           {selectedAttendances.length > 0 && student && (
             <>
               <Alert severity="info" sx={{ mb: 2 }}>
-                선택된 출석 기록을 학부모님께 전송합니다.
+                선택된 <strong>{selectedAttendances.length}개</strong>의 출석 기록을 학부모님께 전송합니다.
               </Alert>
               
               <Typography variant="h6" sx={{ mb: 1 }}>
@@ -782,70 +869,56 @@ const StudentManagement: React.FC = () => {
 
               <Divider sx={{ my: 2 }} />
 
-              {(() => {
-                const selectedAttendance = attendances.find(att => att.id === selectedAttendances[0]);
-                if (selectedAttendance) {
+              <Typography variant="h6" sx={{ mb: 1 }}>
+                전송할 출석 기록 ({selectedAttendances.length}개)
+              </Typography>
+              <Box sx={{ maxHeight: 400, overflow: 'auto' }}>
+                {selectedAttendances.map((attendanceId, index) => {
+                  const selectedAttendance = attendances.find(att => att.id === attendanceId);
+                  if (!selectedAttendance) return null;
+
+                  const relatedExams = exams.filter(exam => exam.attendance === selectedAttendance.id);
+
                   return (
-                    <>
-                      <Typography variant="h6" sx={{ mb: 1 }}>
-                        전송할 출석 기록
+                    <Box key={attendanceId} sx={{ mb: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: 2 }}>
+                      <Typography variant="subtitle1" fontWeight="bold">
+                        {index + 1}. {selectedAttendance.date} - {selectedAttendance.class_type_display}
                       </Typography>
-                      <Typography sx={{ mb: 2 }}>
-                        날짜: <strong>{selectedAttendance.date}</strong><br />
-                        수업 종류: <strong>{selectedAttendance.class_type_display}</strong><br />
+                      <Typography variant="body2" sx={{ mt: 1 }}>
                         내용: <strong>{selectedAttendance.content}</strong><br />
                         지각: <strong>{selectedAttendance.is_late ? '예' : '아니오'}</strong><br />
                         숙제 이행도: <strong>{selectedAttendance.homework_completion}%</strong><br />
                         숙제 정답률: <strong>{selectedAttendance.homework_accuracy}%</strong>
                       </Typography>
 
-                      <Divider sx={{ my: 2 }} />
-
-                      {/* 관련된 시험 기록들 표시 */}
-                      {(() => {
-                        const relatedExams = exams.filter(exam => exam.attendance === selectedAttendance.id);
-
-                        if (relatedExams.length > 0) {
-                          return (
-                            <>
-                              <Typography variant="h6" sx={{ mb: 1 }}>
-                                관련된 시험 기록 ({relatedExams.length}개)
-                              </Typography>
-                              <Box sx={{ maxHeight: 200, overflow: 'auto', mb: 2 }}>
-                                {relatedExams.map((exam, index) => {
-                                  const examAverage = examAverages.find(avg => avg.name === exam.name);
-                                  return (
-                                    <Box key={exam.id} sx={{ mb: 1, p: 1, border: '1px solid #e0e0e0', borderRadius: 1 }}>
-                                      <Typography variant="body2">
-                                        <strong>{exam.name}</strong><br />
-                                        점수: <strong>{exam.score}/{exam.max_score}</strong><br />
-                                        {examAverage && (
-                                          <>
-                                            반 평균: <strong>{Math.round(examAverage.average_score)}/{exam.max_score}</strong><br />
-                                            반 최고점: <strong>{examAverage.max_score}</strong><br />
-                                          </>
-                                        )}
-                                        시험 날짜: <strong>{exam.exam_date}</strong>
-                                      </Typography>
-                                    </Box>
-                                  );
-                                })}
-                              </Box>
-                            </>
-                          );
-                        } else {
-                          return (
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                              관련된 시험 기록이 없습니다.
-                            </Typography>
-                          );
-                        }
-                      })()}
-                    </>
+                      {relatedExams.length > 0 && (
+                        <>
+                          <Divider sx={{ my: 1 }} />
+                          <Typography variant="subtitle2" sx={{ mt: 1 }}>
+                            관련된 시험 기록 ({relatedExams.length}개)
+                          </Typography>
+                          <Box sx={{ mt: 1, pl: 1 }}>
+                            {relatedExams.map(exam => {
+                              const examAverage = examAverages.find(avg => avg.name === exam.name);
+                              return (
+                                <Box key={exam.id} sx={{ mb: 1 }}>
+                                  <Typography variant="body2">
+                                    <strong>{exam.name}</strong> ({exam.category_display}):{' '}
+                                    {exam.grade
+                                      ? `등급 ${exam.grade}`
+                                      : `${exam.score}/${exam.max_score}점`}
+                                    {examAverage && !exam.grade && ` (반 평균: ${Math.round(examAverage.average_score)}점)`}
+                                  </Typography>
+                                </Box>
+                              );
+                            })}
+                          </Box>
+                        </>
+                      )}
+                    </Box>
                   );
-                }
-                return null;
-              })()}
+                })}
+              </Box>
             </>
           )}
         </DialogContent>

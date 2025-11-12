@@ -264,7 +264,10 @@ class StudentSerializer(serializers.ModelSerializer):
         if not exams.exists():
             return {"average_score": 0, "highest_score": 0, "lowest_score": 0}
 
-        scores = list(exams.values_list("score", flat=True))
+        scores = [s for s in exams.values_list("score", flat=True) if s is not None]
+        if not scores:
+            return {"average_score": 0, "highest_score": 0, "lowest_score": 0}
+
         return {
             "average_score": sum(scores) // len(scores),
             "highest_score": max(scores),
@@ -387,6 +390,9 @@ class ExamSerializer(serializers.ModelSerializer):
         source="attendance.student.name", read_only=True
     )
     exam_date = serializers.DateField(source="attendance.date", read_only=True)
+    category_display = serializers.CharField(
+        source="get_category_display", read_only=True
+    )
 
     class Meta:
         model = Exam
@@ -396,49 +402,55 @@ class ExamSerializer(serializers.ModelSerializer):
             "student_name",
             "exam_date",
             "name",
+            "category",
+            "category_display",
             "score",
             "max_score",
+            "grade",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
-    def validate_name(self, value):
-        """시험 이름 검증"""
-        if not value or not value.strip():
-            raise serializers.ValidationError("시험 이름은 필수 입력 항목입니다.")
+    def validate(self, data):
+        category = data.get("category")
+        score = data.get("score")
+        max_score = data.get("max_score")
+        grade = data.get("grade")
 
-        if len(value.strip()) < 2:
-            raise serializers.ValidationError("시험 이름은 최소 2자 이상이어야 합니다.")
+        if category in [Exam.Category.REVIEW, Exam.Category.SCHOOL]:
+            if score is None or max_score is None:
+                raise serializers.ValidationError(
+                    "복습/학교기출 테스트에는 점수와 만점이 모두 필요합니다."
+                )
+            if grade is not None:
+                raise serializers.ValidationError(
+                    "점수 기반 시험에는 등급을 입력할 수 없습니다."
+                )
+            if score > max_score:
+                raise serializers.ValidationError("점수는 만점을 초과할 수 없습니다.")
 
-        if len(value.strip()) > 100:
-            raise serializers.ValidationError(
-                "시험 이름은 최대 100자까지 입력 가능합니다."
-            )
+        elif category in [Exam.Category.ESSAY, Exam.Category.ORAL]:
+            if grade is None:
+                raise serializers.ValidationError("서술/구술 테스트에는 등급이 필요합니다.")
+            if score is not None or max_score is not None:
+                raise serializers.ValidationError(
+                    "등급 기반 시험에는 점수나 만점을 입력할 수 없습니다."
+                )
+            # Clear score and max_score for grade-based exams
+            data["score"] = None
+            data["max_score"] = None
 
-        return value.strip()
+        elif category == Exam.Category.MOCK:
+            if score is None:
+                raise serializers.ValidationError("모의고사에는 점수가 필요합니다.")
+            if grade is not None:
+                raise serializers.ValidationError("모의고사에는 등급을 입력할 수 없습니다.")
+            data["max_score"] = 50  # 모의고사는 만점 50점으로 고정
+            if score > data["max_score"]:
+                raise serializers.ValidationError("점수는 만점을 초과할 수 없습니다.")
 
-    def validate_score(self, value):
-        """점수 검증"""
-        if value < 0:
-            raise serializers.ValidationError("점수는 0 이상이어야 합니다.")
-        return value
-
-    def validate_max_score(self, value):
-        """만점 검증"""
-        if value <= 0:
-            raise serializers.ValidationError("만점은 0보다 커야 합니다.")
-        return value
-
-    def validate(self, attrs):
-        """점수와 만점 비교 검증"""
-        score = attrs.get("score", 0)
-        max_score = attrs.get("max_score", 100)
-
-        if score > max_score:
-            raise serializers.ValidationError("점수는 만점을 초과할 수 없습니다.")
-
-        return attrs
+        return data
 
 
 class StudentDetailSerializer(StudentSerializer):
