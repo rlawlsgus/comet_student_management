@@ -139,6 +139,9 @@ class LoginSerializer(serializers.Serializer):
 
 class ClassSerializer(serializers.ModelSerializer):
     student_count = serializers.SerializerMethodField()
+    students = serializers.PrimaryKeyRelatedField(
+        many=True, queryset=Student.objects.all(), required=False
+    )
 
     class Meta:
         model = Class
@@ -149,13 +152,14 @@ class ClassSerializer(serializers.ModelSerializer):
             "start_time",
             "day_of_week",
             "student_count",
+            "students",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
     def get_student_count(self, obj):
-        return obj.student_set.count()
+        return obj.students.count()
 
     def validate_name(self, value):
         """반 이름 검증"""
@@ -227,7 +231,9 @@ class ClassSerializer(serializers.ModelSerializer):
 
 
 class StudentSerializer(serializers.ModelSerializer):
-    class_info_name = serializers.CharField(source="class_info.name", read_only=True)
+    classes = serializers.PrimaryKeyRelatedField(
+        many=True, queryset=Class.objects.all(), required=False
+    )
     attendance_stats = serializers.SerializerMethodField()
     exam_stats = serializers.SerializerMethodField()
 
@@ -236,8 +242,7 @@ class StudentSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "name",
-            "class_info",
-            "class_info_name",
+            "classes",
             "parent_phone",
             "student_phone",
             "attendance_stats",
@@ -316,43 +321,16 @@ class StudentSerializer(serializers.ModelSerializer):
         phone_pattern = re.compile(r"^010-\d{4}-\d{4}$")
         if not phone_pattern.match(value.strip()):
             raise serializers.ValidationError(
-                "올바른 전화번호 형식으로 입력해주세요. (예: 010-0000-0000)"
+                "올른 전화번호 형식으로 입력해주세요. (예: 010-0000-0000)"
             )
 
         return value.strip()
-
-    def validate_class_info(self, value):
-        """반 정보 검증"""
-        if not value:
-            raise serializers.ValidationError("반은 필수 선택 항목입니다.")
-        return value
-
-    def validate(self, attrs):
-        """전체 데이터 검증"""
-        # 같은 반에 같은 이름의 학생이 있는지 확인
-        name = attrs.get("name")
-        class_info = attrs.get("class_info")
-
-        if name and class_info:
-            # 수정 시에는 자기 자신을 제외하고 중복 확인
-            instance = getattr(self, "instance", None)
-            queryset = Student.objects.filter(name=name, class_info=class_info)
-
-            if instance:
-                queryset = queryset.exclude(id=instance.id)
-
-            if queryset.exists():
-                raise serializers.ValidationError(
-                    "같은 반에 같은 이름의 학생이 이미 존재합니다."
-                )
-
-        return attrs
 
 
 class AttendanceSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source="student.name", read_only=True)
     class_info_name = serializers.CharField(
-        source="student.class_info.name", read_only=True
+        source="class_info.name", read_only=True, allow_null=True
     )
     class_type_display = serializers.SerializerMethodField()
 
@@ -362,6 +340,7 @@ class AttendanceSerializer(serializers.ModelSerializer):
             "id",
             "student",
             "student_name",
+            "class_info",
             "class_info_name",
             "date",
             "class_type",
@@ -393,6 +372,9 @@ class ExamSerializer(serializers.ModelSerializer):
     category_display = serializers.CharField(
         source="get_category_display", read_only=True
     )
+    class_info = serializers.IntegerField(
+        source="attendance.class_info.id", read_only=True, allow_null=True
+    )
 
     class Meta:
         model = Exam
@@ -407,6 +389,7 @@ class ExamSerializer(serializers.ModelSerializer):
             "score",
             "max_score",
             "grade",
+            "class_info",
             "created_at",
             "updated_at",
         ]
@@ -453,7 +436,14 @@ class ExamSerializer(serializers.ModelSerializer):
         return data
 
 
+class ClassForStudentDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Class
+        fields = ("id", "name", "subject", "day_of_week", "start_time")
+
+
 class StudentDetailSerializer(StudentSerializer):
+    classes = ClassForStudentDetailSerializer(many=True, read_only=True)
     attendance_records = serializers.SerializerMethodField()
     exam_records = serializers.SerializerMethodField()
 

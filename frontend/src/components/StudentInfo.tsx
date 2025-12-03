@@ -6,49 +6,25 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   CircularProgress,
   Box,
+  Typography,
 } from '@mui/material';
 
 interface Student {
   id: number;
   name: string;
-  classInfo?: string;
-  class_info_name?: string;
-  attendanceRecords?: {
-    date: string;
-    classType: string;
-    content: string;
-    isLate: boolean;
-    homeworkCompletion: number;
-    homeworkAccuracy: number;
-  }[];
-  examRecords?: {
-    name: string;
-    score: number;
-    date: string;
-  }[];
-  attendanceStats?: {
-    totalClasses: number;
-    attendedClasses: number;
-    lateCount: number;
-  };
-  examStats?: {
-    averageScore: number;
-    highestScore: number;
-    lowestScore: number;
-  };
+  classes: number[];
 }
 
 interface StudentInfoProps {
   students: Student[];
-  selectedClass: string;
+  selectedClassId: number; // 0 for all, -1 for unassigned
   onStudentSelect: (student: Student) => void;
   loading?: boolean;
 }
 
-const StudentInfo: React.FC<StudentInfoProps> = ({ students, selectedClass, onStudentSelect, loading = false }) => {
+const StudentInfo: React.FC<StudentInfoProps> = ({ students, selectedClassId, onStudentSelect, loading = false }) => {
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
@@ -57,9 +33,16 @@ const StudentInfo: React.FC<StudentInfoProps> = ({ students, selectedClass, onSt
     );
   }
 
-  const filteredStudents = selectedClass 
-    ? students.filter(student => student.class_info_name === selectedClass)
-    : students;
+  const filteredStudents = students.filter(student => {
+    if (selectedClassId === 0) { // 'All' classes
+      return true;
+    }
+    if (selectedClassId === -1) { // 'Unassigned'
+      return student.classes.length === 0;
+    }
+    // Filter by specific class ID
+    return student.classes.includes(selectedClassId);
+  });
 
   return (
     <TableContainer>
@@ -70,15 +53,25 @@ const StudentInfo: React.FC<StudentInfoProps> = ({ students, selectedClass, onSt
           </TableRow>
         </TableHead>
         <TableBody>
-          {filteredStudents.map((student) => (
-            <TableRow 
-              key={student.id}
-              onClick={() => onStudentSelect(student)}
-              sx={{ cursor: 'pointer', '&:hover': { backgroundColor: '#f5f5f5' } }}
-            >
-              <TableCell>{student.name}</TableCell>
+          {filteredStudents.length > 0 ? (
+            filteredStudents.map((student) => (
+              <TableRow 
+                key={student.id}
+                onClick={() => onStudentSelect(student)}
+                sx={{ cursor: 'pointer', '&:hover': { backgroundColor: '#f5f5f5' } }}
+              >
+                <TableCell>{student.name}</TableCell>
+              </TableRow>
+            ))
+          ) : (
+            <TableRow>
+              <TableCell>
+                <Typography color="text.secondary" align="center">
+                  학생 없음
+                </Typography>
+              </TableCell>
             </TableRow>
-          ))}
+          )}
         </TableBody>
       </Table>
     </TableContainer>

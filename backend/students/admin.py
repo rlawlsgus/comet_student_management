@@ -31,15 +31,15 @@ class ClassAdmin(admin.ModelAdmin):
     ordering = ["-created_at"]
 
     def student_count(self, obj):
-        return obj.student_set.count()
+        return obj.students.count()
 
     student_count.short_description = "학생 수"
 
 
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
-    list_display = ["name", "class_info", "parent_phone", "student_phone", "created_at"]
-    list_filter = ["class_info__subject", "class_info", "created_at"]
+    list_display = ["name", "parent_phone", "student_phone", "created_at"]
+    list_filter = ["classes__subject", "classes", "created_at"]
     search_fields = ["name", "parent_phone", "student_phone"]
     ordering = ["-created_at"]
 
@@ -48,6 +48,7 @@ class StudentAdmin(admin.ModelAdmin):
 class AttendanceAdmin(admin.ModelAdmin):
     list_display = [
         "student",
+        "class_info",
         "date",
         "class_type",
         "content",
@@ -55,7 +56,7 @@ class AttendanceAdmin(admin.ModelAdmin):
         "homework_completion",
         "homework_accuracy",
     ]
-    list_filter = ["class_type", "is_late", "date", "student__class_info__subject"]
+    list_filter = ["class_type", "is_late", "date", "class_info__subject"]
     search_fields = ["student__name", "content"]
     ordering = ["-date"]
     date_hierarchy = "date"
@@ -64,6 +65,6 @@ class AttendanceAdmin(admin.ModelAdmin):
 @admin.register(Exam)
 class ExamAdmin(admin.ModelAdmin):
     list_display = ["name", "attendance", "score", "created_at"]
-    list_filter = ["score", "created_at", "attendance__student__class_info__subject"]
+    list_filter = ["score", "created_at", "attendance__class_info__subject"]
     search_fields = ["name", "attendance__student__name"]
     ordering = ["-created_at"]

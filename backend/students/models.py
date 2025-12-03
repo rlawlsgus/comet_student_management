@@ -46,6 +46,9 @@ class Class(models.Model):
     day_of_week = models.CharField(
         max_length=10, choices=DayOfWeek.choices, verbose_name="요일"
     )
+    students = models.ManyToManyField(
+        "Student", related_name="classes", blank=True, verbose_name="학생들"
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="생성일")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="수정일")
 
@@ -59,7 +62,6 @@ class Class(models.Model):
 
 class Student(models.Model):
     name = models.CharField(max_length=100, verbose_name="이름")
-    class_info = models.ForeignKey(Class, on_delete=models.CASCADE, verbose_name="반")
     parent_phone = models.CharField(max_length=15, verbose_name="부모님 전화번호")
     student_phone = models.CharField(
         max_length=15, null=True, blank=True, verbose_name="학생 전화번호"
@@ -72,7 +74,7 @@ class Student(models.Model):
         verbose_name_plural = "학생"
 
     def __str__(self):
-        return f"{self.name} ({self.class_info.name})"
+        return self.name
 
 
 class Attendance(models.Model):
@@ -83,6 +85,9 @@ class Attendance(models.Model):
         ADDITIONAL = "ADDITIONAL", _("추가")
 
     student = models.ForeignKey(Student, on_delete=models.CASCADE, verbose_name="학생")
+    class_info = models.ForeignKey(
+        Class, on_delete=models.CASCADE, verbose_name="반", null=True
+    )
     date = models.DateField(verbose_name="출석일")
     class_type = models.CharField(
         max_length=10, choices=ClassType.choices, verbose_name="수업종류"

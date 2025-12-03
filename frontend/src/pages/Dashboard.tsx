@@ -126,7 +126,7 @@ const Dashboard: React.FC = () => {
             </Typography>
             <StudentInfo 
               students={students} 
-              selectedClass={selectedClassId ? classes.find(c => c.id === selectedClassId)?.name || '' : ''}
+              selectedClassId={selectedClassId || 0}
               onStudentSelect={handleStudentSelect}
               loading={loading}
             />
