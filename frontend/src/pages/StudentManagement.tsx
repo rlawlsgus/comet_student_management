@@ -22,8 +22,6 @@ import {
   MenuItem,
   Alert,
   Checkbox,
-  IconButton,
-  Tooltip,
   Snackbar,
   Divider,
   Slider,
@@ -41,7 +39,7 @@ import { useAuth } from '../contexts/AuthContext';
 interface Student {
   id: number;
   name: string;
-  class_info_name: string;
+  classes: { id: number; name: string }[];
   parent_phone: string;
   student_phone?: string;
 }
@@ -55,6 +53,8 @@ interface Attendance {
   is_late: boolean;
   homework_completion: number;
   homework_accuracy: number;
+  class_info_name?: string;
+  class_info: number;
 }
 
 interface Exam {
@@ -67,6 +67,7 @@ interface Exam {
   grade?: string;
   exam_date: string;
   attendance: number;
+  class_info?: number;
 }
 
 interface ExamAverage {
@@ -85,6 +86,7 @@ const StudentManagement: React.FC = () => {
   const [attendances, setAttendances] = useState<Attendance[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
   const [examAverages, setExamAverages] = useState<ExamAverage[]>([]);
+  const [selectedClassId, setSelectedClassId] = useState<number | 'all'>('all');
   const [openAttendanceDialog, setOpenAttendanceDialog] = useState(false);
   const [openExamDialog, setOpenExamDialog] = useState(false);
   const [openDeleteAttendanceDialog, setOpenDeleteAttendanceDialog] = useState(false);
@@ -104,8 +106,9 @@ const StudentManagement: React.FC = () => {
     class_type: 'REGULAR',
     content: '',
     is_late: 'false' as string,
-    homework_completion: 0,
-    homework_accuracy: 0,
+    homework_completion: 100,
+    homework_accuracy: 100,
+    class_info: null as number | null,
   });
   const [newExam, setNewExam] = useState({
     name: '',
@@ -127,20 +130,21 @@ const StudentManagement: React.FC = () => {
       setLoading(true);
       setError('');
 
-      // 학생 정보 가져오기
-      const studentData = await studentAPI.getStudent(studentId);
+      const [
+        studentData,
+        attendanceData,
+        examData,
+        averageData,
+      ] = await Promise.all([
+        studentAPI.getStudent(studentId),
+        studentAPI.getAttendanceRecords(studentId),
+        studentAPI.getExamRecords(studentId),
+        examAPI.getExamAverages(studentId),
+      ]);
+
       setStudent(studentData);
-
-      // 출석 기록 가져오기
-      const attendanceData = await studentAPI.getAttendanceRecords(studentId);
       setAttendances(attendanceData);
-
-      // 시험 기록 가져오기
-      const examData = await studentAPI.getExamRecords(studentId);
       setExams(examData);
-
-      // 시험별 평균 점수 가져오기
-      const averageData = await examAPI.getExamAverages(studentId);
       setExamAverages(averageData);
     } catch (error) {
       console.error('Error fetching student data:', error);
@@ -152,6 +156,11 @@ const StudentManagement: React.FC = () => {
 
   const handleAttendanceSubmit = async () => {
     if (!student) return;
+
+    if (!newAttendance.class_info) {
+      setError('수업을 선택해주세요.');
+      return;
+    }
 
     // 유효성 검사
     if (newAttendance.homework_completion < 0 || newAttendance.homework_completion > 100) {
@@ -181,8 +190,9 @@ const StudentManagement: React.FC = () => {
         class_type: 'REGULAR',
         content: '',
         is_late: 'false',
-        homework_completion: 0,
-        homework_accuracy: 0,
+        homework_completion: 100,
+        homework_accuracy: 100,
+        class_info: null,
       });
     } catch (error: any) {
       console.error('Error submitting attendance:', error);
@@ -256,19 +266,27 @@ const StudentManagement: React.FC = () => {
     );
   };
 
+  const filteredAttendances = selectedClassId === 'all'
+    ? attendances
+    : attendances.filter(att => att.class_info === selectedClassId);
+
+  const filteredExams = selectedClassId === 'all'
+    ? exams
+    : exams.filter(exam => exam.class_info === selectedClassId);
+
   const handleAttendanceSelectAll = () => {
-    if (selectedAttendances.length === attendances.length) {
+    if (selectedAttendances.length === filteredAttendances.length) {
       setSelectedAttendances([]);
     } else {
-      setSelectedAttendances(attendances.map(att => att.id));
+      setSelectedAttendances(filteredAttendances.map(att => att.id));
     }
   };
 
   const handleExamSelectAll = () => {
-    if (selectedExams.length === exams.length) {
+    if (selectedExams.length === filteredExams.length) {
       setSelectedExams([]);
     } else {
-      setSelectedExams(exams.map(exam => exam.id));
+      setSelectedExams(filteredExams.map(exam => exam.id));
     }
   };
 
@@ -424,6 +442,25 @@ const StudentManagement: React.FC = () => {
         </Alert>
       )}
 
+      <Paper sx={{ p: 2, mb: 3 }}>
+        <FormControl>
+          <InputLabel>반 선택</InputLabel>
+          <Select
+            value={selectedClassId}
+            label="반 선택"
+            onChange={(e) => setSelectedClassId(e.target.value as number | 'all')}
+            sx={{ minWidth: 200 }}
+          >
+            <MenuItem value="all">전체</MenuItem>
+            {student.classes.map((classInfo) => (
+              <MenuItem key={classInfo.id} value={classInfo.id}>
+                {classInfo.name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </Paper>
+
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         <Box>
           <Paper sx={{ p: 2 }}>
@@ -456,8 +493,8 @@ const StudentManagement: React.FC = () => {
                   <TableRow>
                     <TableCell padding="checkbox">
                       <Checkbox
-                        checked={attendances.length > 0 && selectedAttendances.length === attendances.length}
-                        indeterminate={selectedAttendances.length > 0 && selectedAttendances.length < attendances.length}
+                        checked={filteredAttendances.length > 0 && selectedAttendances.length === filteredAttendances.length}
+                        indeterminate={selectedAttendances.length > 0 && selectedAttendances.length < filteredAttendances.length}
                         onChange={handleAttendanceSelectAll}
                       />
                     </TableCell>
@@ -470,7 +507,7 @@ const StudentManagement: React.FC = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {attendances.map((attendance) => (
+                  {filteredAttendances.map((attendance) => (
                     <TableRow key={attendance.id}>
                       <TableCell padding="checkbox">
                         <Checkbox
@@ -511,7 +548,17 @@ const StudentManagement: React.FC = () => {
                 )}
                 <Button
                   variant="contained"
-                  onClick={() => setOpenExamDialog(true)}
+                  onClick={() => {
+                    setNewExam({ // Reset the whole form
+                        name: '',
+                        category: 'REVIEW',
+                        score: 0,
+                        max_score: 100,
+                        grade: 'A',
+                        attendance: attendances.length > 0 ? attendances[0].id : null
+                    });
+                    setOpenExamDialog(true);
+                  }}
                 >
                   시험 기록 추가
                 </Button>
@@ -523,8 +570,8 @@ const StudentManagement: React.FC = () => {
                   <TableRow>
                     <TableCell padding="checkbox">
                       <Checkbox
-                        checked={exams.length > 0 && selectedExams.length === exams.length}
-                        indeterminate={selectedExams.length > 0 && selectedExams.length < exams.length}
+                        checked={filteredExams.length > 0 && selectedExams.length === filteredExams.length}
+                        indeterminate={selectedExams.length > 0 && selectedExams.length < filteredExams.length}
                         onChange={handleExamSelectAll}
                       />
                     </TableCell>
@@ -535,7 +582,7 @@ const StudentManagement: React.FC = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {exams.map((exam) => (
+                  {filteredExams.map((exam) => (
                     <TableRow key={exam.id}>
                       <TableCell padding="checkbox">
                         <Checkbox
@@ -562,12 +609,24 @@ const StudentManagement: React.FC = () => {
       <Dialog open={openAttendanceDialog} onClose={() => setOpenAttendanceDialog(false)}>
         <DialogTitle>출석 기록 추가</DialogTitle>
         <DialogContent>
+          <FormControl fullWidth sx={{ mt: 2, mb: 2 }}>
+            <InputLabel>수업 선택</InputLabel>
+            <Select
+                value={newAttendance.class_info || ''}
+                label="수업 선택"
+                onChange={(e) => setNewAttendance({ ...newAttendance, class_info: e.target.value as number })}
+            >
+                {student?.classes.map(classInfo => (
+                    <MenuItem key={classInfo.id} value={classInfo.id}>{classInfo.name}</MenuItem>
+                ))}
+            </Select>
+          </FormControl>
           <LocalizationProvider dateAdapter={AdapterDateFns}>
             <DatePicker
               label="날짜"
               value={newAttendance.date}
               onChange={(date) => setNewAttendance({ ...newAttendance, date: date || new Date() })}
-              sx={{ mt: 2, mb: 2, width: '100%' }}
+              sx={{ mb: 2, width: '100%' }}
             />
           </LocalizationProvider>
           <FormControl fullWidth sx={{ mb: 2 }}>
@@ -775,7 +834,7 @@ const StudentManagement: React.FC = () => {
             >
               {attendances.map((attendance) => (
                 <MenuItem key={attendance.id} value={attendance.id}>
-                  {attendance.date} - {attendance.class_type_display}
+                  {attendance.date} - {attendance.class_info_name || '알 수 없는 반'}
                 </MenuItem>
               ))}
             </Select>

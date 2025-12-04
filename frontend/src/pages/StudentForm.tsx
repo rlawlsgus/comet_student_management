@@ -72,9 +72,19 @@ const StudentForm: React.FC = () => {
   const loadStudentData = async (studentId: number) => {
     try {
       const studentData = await studentAPI.getStudent(studentId);
+      
+      let classIds: number[] = [];
+      if (studentData.classes && studentData.classes.length > 0) {
+        if (typeof studentData.classes[0] === 'object' && studentData.classes[0] !== null) {
+          classIds = studentData.classes.map((c: any) => c.id);
+        } else {
+          classIds = studentData.classes;
+        }
+      }
+
       setFormData({
         name: studentData.name,
-        classes: studentData.classes.map((c: any) => c.id),
+        classes: classIds,
         parentPhone: studentData.parent_phone,
         studentPhone: studentData.student_phone || '',
       });

@@ -181,16 +181,6 @@ class StudentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        if request.user.role == User.Role.TEACHER:
-            instance = self.get_object()
-            is_assigned = instance.classes.exists()
-            can_modify = not is_assigned or instance.classes.filter(subject=request.user.subject).exists()
-            if not can_modify:
-                return Response(
-                    {"detail": "자신의 과목에 속하지 않은 학생은 수정할 수 없습니다."},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-
         return super().update(request, *args, **kwargs)
 
     def partial_update(self, request, *args, **kwargs):
@@ -199,16 +189,6 @@ class StudentViewSet(viewsets.ModelViewSet):
                 {"detail": "조교는 학생을 수정할 수 없습니다."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-
-        if request.user.role == User.Role.TEACHER:
-            instance = self.get_object()
-            is_assigned = instance.classes.exists()
-            can_modify = not is_assigned or instance.classes.filter(subject=request.user.subject).exists()
-            if not can_modify:
-                return Response(
-                    {"detail": "자신의 과목에 속하지 않은 학생은 수정할 수 없습니다."},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
 
         return super().partial_update(request, *args, **kwargs)
 
@@ -257,14 +237,16 @@ class StudentViewSet(viewsets.ModelViewSet):
     def attendance_records(self, request, pk=None):
         student = self.get_object()
         user = request.user
+        
+        attendances = student.attendance_set.all().order_by("-date")
         if user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
             if not student.classes.filter(subject=user.subject).exists():
                 return Response(
                     {"detail": "해당 학생의 출석 기록에 접근할 권한이 없습니다."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
+            attendances = attendances.filter(class_info__subject=user.subject)
 
-        attendances = student.attendance_set.all().order_by("-date")
         serializer = AttendanceSerializer(attendances, many=True)
         return Response(serializer.data)
 
@@ -272,15 +254,17 @@ class StudentViewSet(viewsets.ModelViewSet):
     def exam_records(self, request, pk=None):
         student = self.get_object()
         user = request.user
+
+        exams = Exam.objects.filter(attendance__student=student).order_by(
+            "-attendance__date"
+        )
         if user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
             if not student.classes.filter(subject=user.subject).exists():
                 return Response(
                     {"detail": "해당 학생의 시험 기록에 접근할 권한이 없습니다."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
+            exams = exams.filter(attendance__class_info__subject=user.subject)
 
-        exams = Exam.objects.filter(attendance__student=student).order_by(
-            "-attendance__date"
-        )
         serializer = ExamSerializer(exams, many=True)
         return Response(serializer.data)

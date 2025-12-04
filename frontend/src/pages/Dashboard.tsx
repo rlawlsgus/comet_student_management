@@ -142,7 +142,7 @@ const Dashboard: React.FC = () => {
               overflow: 'auto'
             }}
           >
-            <StudentDetail student={selectedStudent} />
+            <StudentDetail student={selectedStudent} selectedClassId={selectedClassId} />
           </Paper>
         </Box>
 

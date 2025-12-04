@@ -123,13 +123,14 @@ class DashboardView(APIView):
                         exam_stats[exam_name].append(exam.score)
 
                     for exam_name, scores in exam_stats.items():
+                        valid_scores = [s for s in scores if s is not None]
                         grade_stats.append(
                             {
                                 "exam_name": exam_name,
-                                "average": sum(scores) // len(scores) if scores else 0,
-                                "highest": max(scores) if scores else 0,
-                                "lowest": min(scores) if scores else 0,
-                                "count": len(scores),
+                                "average": sum(valid_scores) // len(valid_scores) if valid_scores else 0,
+                                "highest": max(valid_scores) if valid_scores else 0,
+                                "lowest": min(valid_scores) if valid_scores else 0,
+                                "count": len(scores), # 전체 시험 수
                             }
                         )
 

@@ -1,144 +1,151 @@
-from django.core.management.base import BaseCommand
-from django.contrib.auth import get_user_model
-from students.models import Class, Student, Attendance, Exam
-from datetime import date, timedelta
 import random
-
-User = get_user_model()
-
+from datetime import date, time, timedelta
+from django.core.management.base import BaseCommand
+from django.db import transaction
+from students.models import User, Class, Student, Attendance, Exam
 
 class Command(BaseCommand):
-    help = "테스트 데이터를 생성합니다."
+    help = "Generates test data for the student management system."
 
-    def handle(self, *args, **options):
-        self.stdout.write("테스트 데이터를 생성하는 중...")
+    @transaction.atomic
+    def handle(self, *args, **kwargs):
+        self.stdout.write("Deleting old data...")
+        self._clean_db()
 
-        # 관리자 계정 생성
-        admin_user, created = User.objects.get_or_create(
-            username="admin",
-            defaults={
-                "name": "관리자",
-                "role": User.Role.ADMIN,
-                "subject": User.Subject.CHEMISTRY,
-                "is_staff": True,
-                "is_superuser": True,
-            },
+        self.stdout.write("Creating new data...")
+        
+        # 1. Create Users
+        users = self._create_users()
+
+        # 2. Create Classes
+        classes = self._create_classes()
+
+        # 3. Create Students
+        students = self._create_students()
+
+        # 4. Enroll students in classes
+        self._enroll_students(classes, students)
+
+        # 5. Create Attendance and Exam records
+        self._create_records(classes)
+
+        self.stdout.write(self.style.SUCCESS("Successfully created test data."))
+
+    def _clean_db(self):
+        """Deletes all data from the relevant models."""
+        Exam.objects.all().delete()
+        Attendance.objects.all().delete()
+        Student.objects.all().delete()
+        Class.objects.all().delete()
+        User.objects.filter(is_superuser=False).delete()
+
+    def _create_users(self):
+        """Creates Admin, Teacher, and Assistant users."""
+        users = {}
+        users['admin'] = User.objects.create_superuser(
+            username="admin", password="password", email="admin@test.com", name="관리자"
         )
-        if created:
-            admin_user.set_password("admin123")
-            admin_user.save()
-            self.stdout.write(
-                self.style.SUCCESS(f"관리자 계정 생성: {admin_user.username}")
-            )
-
-        # 사용자 생성
-        teacher, created = User.objects.get_or_create(
-            username="teacher1",
-            defaults={
-                "name": "김선생",
-                "role": "TEACHER",
-                "subject": "CHEMISTRY",
-                "is_staff": True,
-            },
+        users['teacher_chem'] = User.objects.create_user(
+            username="teacher_chem", password="password", name="김화학", role=User.Role.TEACHER, subject=User.Subject.CHEMISTRY
         )
-        if created:
-            teacher.set_password("password123")
-            teacher.save()
-            self.stdout.write(f"선생님 계정 생성: {teacher.username}")
-
-        assistant, created = User.objects.get_or_create(
-            username="assistant1",
-            defaults={
-                "name": "이조교",
-                "role": "ASSISTANT",
-                "subject": "BIOLOGY",
-            },
+        users['teacher_bio'] = User.objects.create_user(
+            username="teacher_bio", password="password", name="박생명", role=User.Role.TEACHER, subject=User.Subject.BIOLOGY
         )
-        if created:
-            assistant.set_password("password123")
-            assistant.save()
-            self.stdout.write(f"조교 계정 생성: {assistant.username}")
-
-        # 반 생성
-        class1, created = Class.objects.get_or_create(
-            name="화학 기초반",
-            defaults={
-                "subject": "CHEMISTRY",
-                "start_time": "14:00",
-                "day_of_week": "MONDAY",
-            },
+        users['teacher_geo'] = User.objects.create_user(
+            username="teacher_geo", password="password", name="이과학", role=User.Role.TEACHER, subject=User.Subject.GEOSCIENCE
         )
-        if created:
-            self.stdout.write(f"반 생성: {class1.name}")
+        self.stdout.write(f"  - Created {len(users)} users.")
+        return users
 
-        class2, created = Class.objects.get_or_create(
-            name="생명 심화반",
-            defaults={
-                "subject": "BIOLOGY",
-                "start_time": "16:00",
-                "day_of_week": "WEDNESDAY",
-            },
-        )
-        if created:
-            self.stdout.write(f"반 생성: {class2.name}")
-
-        # 학생 생성
-        students_data = [
-            {"name": "홍길동", "class": class1, "parent_phone": "010-1234-5678"},
-            {"name": "김철수", "class": class1, "parent_phone": "010-2345-6789"},
-            {"name": "이영희", "class": class1, "parent_phone": "010-3456-7890"},
-            {"name": "박민수", "class": class2, "parent_phone": "010-4567-8901"},
-            {"name": "정수진", "class": class2, "parent_phone": "010-5678-9012"},
+    def _create_classes(self):
+        """Creates classes for each subject."""
+        classes_to_create = [
+            {'name': '화학1 심화반', 'subject': User.Subject.CHEMISTRY, 'day_of_week': Class.DayOfWeek.MONDAY, 'start_time': time(18, 0)},
+            {'name': '화학2 기본반', 'subject': User.Subject.CHEMISTRY, 'day_of_week': Class.DayOfWeek.WEDNESDAY, 'start_time': time(19, 30)},
+            {'name': '생명1 심화반', 'subject': User.Subject.BIOLOGY, 'day_of_week': Class.DayOfWeek.TUESDAY, 'start_time': time(18, 0)},
+            {'name': '생명2 기본반', 'subject': User.Subject.BIOLOGY, 'day_of_week': Class.DayOfWeek.FRIDAY, 'start_time': time(19, 0)},
+            {'name': '지구과학1', 'subject': User.Subject.GEOSCIENCE, 'day_of_week': Class.DayOfWeek.SATURDAY, 'start_time': time(14, 0)},
         ]
+        classes = [Class.objects.create(**data) for data in classes_to_create]
+        self.stdout.write(f"  - Created {len(classes)} classes.")
+        return classes
 
-        students = []
-        for student_data in students_data:
-            student, created = Student.objects.get_or_create(
-                name=student_data["name"],
-                class_info=student_data["class"],
-                defaults={
-                    "parent_phone": student_data["parent_phone"],
-                },
-            )
-            if created:
-                self.stdout.write(f"학생 생성: {student.name}")
-            students.append(student)
+    def _create_students(self):
+        """Creates a pool of students."""
+        first_names = ["김", "이", "박", "최", "정", "강", "조", "윤", "장", "임"]
+        last_names = ["민준", "서준", "도윤", "예준", "시우", "하준", "지호", "서연", "서윤", "지우"]
+        
+        students_to_create = []
+        for i in range(30):
+            name = f"{random.choice(first_names)}{random.choice(last_names)}"
+            parent_phone = f"010-{random.randint(1000, 9999)}-{random.randint(1000, 9999)}"
+            student_phone = f"010-{random.randint(1000, 9999)}-{random.randint(1000, 9999)}"
+            students_to_create.append({'name': name, 'parent_phone': parent_phone, 'student_phone': student_phone})
 
-        # 출석 기록 생성
-        start_date = date.today() - timedelta(days=30)
-        class_types = ["REGULAR", "MAKEUP", "EXTRA", "ADDITIONAL"]
+        students = [Student.objects.create(**data) for data in students_to_create]
+        self.stdout.write(f"  - Created {len(students)} students.")
+        return students
 
-        for i in range(15):  # 15주간의 데이터 생성 (약 3개월)
-            current_date = start_date + timedelta(days=i * 2)  # 2일마다 수업
+    def _enroll_students(self, classes, students):
+        """Randomly enrolls students in classes."""
+        for class_obj in classes:
+            num_students_to_enroll = random.randint(10, 15)
+            enrolled_students = random.sample(students, num_students_to_enroll)
+            class_obj.students.set(enrolled_students)
+        self.stdout.write("  - Enrolled students in classes.")
 
-            for student in students:
-                attendance, created = Attendance.objects.get_or_create(
-                    student=student,
-                    date=current_date,
-                    defaults={
-                        "class_type": random.choice(class_types),
-                        "content": f"{student.class_info.get_subject_display()} 수업 - {i+1}주차",
-                        "is_late": random.choice([True, False]),
-                        "homework_completion": random.randint(70, 100),
-                        "homework_accuracy": random.randint(70, 100),
-                    },
-                )
-                if created:
-                    # 시험 기록 생성 (더 자주 시험)
-                    if i % 2 == 0:  # 2주마다 시험
-                        exam, created = Exam.objects.get_or_create(
-                            attendance=attendance,
-                            name=f"{student.class_info.get_subject_display()} {i//2 + 1}차 시험",
-                            defaults={
-                                "score": random.randint(60, 100),
-                            },
-                        )
-                        if created:
-                            self.stdout.write(
-                                f"시험 기록 생성: {student.name} - {exam.name}"
-                            )
+    def _create_records(self, classes):
+        """Creates attendance and exam records for the past 3 months."""
+        today = date.today()
+        
+        for class_obj in classes:
+            class_day_map = {
+                "MONDAY": 0, "TUESDAY": 1, "WEDNESDAY": 2, "THURSDAY": 3, 
+                "FRIDAY": 4, "SATURDAY": 5, "SUNDAY": 6
+            }
+            class_weekday = class_day_map[class_obj.day_of_week]
 
-        self.stdout.write(self.style.SUCCESS("테스트 데이터 생성 완료!"))
-        self.stdout.write("로그인 정보:")
-        self.stdout.write("  선생님: teacher1 / password123")
-        self.stdout.write("  조교: assistant1 / password123")
+            for student in class_obj.students.all():
+                for i in range(12): # For the last 12 weeks
+                    # Go back week by week
+                    current_date = today - timedelta(weeks=i)
+                    # Adjust to the correct day of the week
+                    days_ago = (current_date.weekday() - class_weekday + 7) % 7
+                    attendance_date = current_date - timedelta(days=days_ago)
+                    
+                    if attendance_date > today:
+                        continue
+
+                    # Create Attendance
+                    attendance = Attendance.objects.create(
+                        student=student,
+                        class_info=class_obj,
+                        date=attendance_date,
+                        class_type=random.choices(
+                            [c[0] for c in Attendance.ClassType.choices], [0.8, 0.05, 0.1, 0.05]
+                        )[0],
+                        content=f"Week {12-i} recap",
+                        is_late=random.random() < 0.1, # 10% chance of being late
+                        homework_completion=random.choice([80, 90, 100, 100, 100]),
+                        homework_accuracy=random.randint(70, 100),
+                    )
+
+                    # Create Exam for this attendance (50% chance)
+                    if random.random() < 0.5:
+                        category = random.choice([c[0] for c in Exam.Category.choices])
+                        exam_data = {
+                            "attendance": attendance,
+                            "name": f"{12-i}주차 {Exam.Category(category).label} 테스트",
+                            "category": category,
+                        }
+
+                        if category in [Exam.Category.REVIEW, Exam.Category.MOCK, Exam.Category.SCHOOL]:
+                            max_score = 100 if category != Exam.Category.MOCK else 50
+                            exam_data["max_score"] = max_score
+                            exam_data["score"] = random.randint(int(max_score * 0.4), max_score)
+                        else: # ESSAY or ORAL
+                            exam_data["grade"] = random.choice([g[0] for g in Exam.Grade.choices])
+                        
+                        Exam.objects.create(**exam_data)
+        
+        self.stdout.write("  - Created attendance and exam records.")

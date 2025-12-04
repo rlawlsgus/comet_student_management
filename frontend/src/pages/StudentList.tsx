@@ -34,7 +34,6 @@ import {
   Edit as EditIcon, 
   Delete as DeleteIcon,
   AutoStories as NoteIcon,
-  Add as AddIcon,
   Send as SendIcon,
   Assignment as AssignmentIcon,
   School as SchoolIcon
@@ -101,17 +100,17 @@ const StudentList: React.FC = () => {
     class_type: 'REGULAR',
     content: '',
     is_late: 'false' as string,
-    homework_completion: 0,
-    homework_accuracy: 0,
+    homework_completion: 100,
+    homework_accuracy: 100,
     class_info: null as number | null,
   });
 
   const [newExam, setNewExam] = useState({
     name: '',
     category: 'REVIEW',
-    score: null as number | null,
-    max_score: 100 as number | null,
-    grade: null as string | null,
+    score: 0,
+    max_score: 100,
+    grade: 'A',
     attendance: null as number | null,
   });
 
@@ -223,60 +222,50 @@ const StudentList: React.FC = () => {
   };
 
   // 시험 기록 개별 추가
-  const handleNewExamChange = (field: string, value: any) => {
-    setNewExam(prev => {
-      const updated = { ...prev, [field]: value };
-      // Reset fields when category changes
-      if (field === 'category') {
-        updated.score = null;
-        updated.max_score = 100;
-        updated.grade = null;
-        if (value === 'MOCK') {
-          updated.max_score = 50;
-        }
-      }
-      return updated;
-    });
-  };
-
   const handleExamSubmit = async () => {
-    if (!selectedStudent || !newExam.attendance) {
+    if (!selectedStudent) return;
+
+    const { category, name, score, max_score, grade, attendance } = newExam;
+
+    if (!attendance) {
       setError('출석 기록을 선택해주세요.');
       return;
     }
-    
-    const payload: any = {
-      name: newExam.name,
-      category: newExam.category,
-      attendance: newExam.attendance,
-    };
 
-    const isGradeBased = newExam.category === 'ESSAY' || newExam.category === 'ORAL';
+    let examData: any = { name, category, attendance };
 
-    if (isGradeBased) {
-      if (!newExam.grade) {
-        setError('등급을 선택해주세요.');
+    if (category === 'REVIEW' || category === 'SCHOOL') {
+      if (score < 0 || score > max_score) {
+        setError(`점수는 0에서 ${max_score} 사이여야 합니다.`);
         return;
       }
-      payload.grade = newExam.grade;
-    } else {
-      if (newExam.score === null || newExam.score < 0) {
-        setError('점수를 올바르게 입력해주세요.');
+      examData = { ...examData, score, max_score };
+    } else if (category === 'ESSAY' || category === 'ORAL') {
+      examData = { ...examData, grade };
+    } else if (category === 'MOCK') {
+      if (score < 0 || score > 50) {
+        setError('점수는 0에서 50 사이여야 합니다.');
         return;
       }
-      if (newExam.max_score === null || newExam.max_score <= 0) {
-        setError('만점을 올바르게 입력해주세요.');
-        return;
-      }
-      payload.score = newExam.score;
-      payload.max_score = newExam.max_score;
+      examData = { ...examData, score, max_score: 50 };
     }
 
     try {
       setError('');
-      await examAPI.createExam(payload);
+      await examAPI.createExam(examData);
+
       setOpenExamDialog(false);
       setSnackbar({ open: true, message: `${selectedStudent.name} 학생에게 시험 기록이 추가되었습니다.`, severity: 'success' });
+      
+      // 폼 초기화
+      setNewExam({
+        name: '',
+        category: 'REVIEW',
+        score: 0,
+        max_score: 100,
+        grade: 'A',
+        attendance: null,
+      });
     } catch (error: any) {
       console.error('Error submitting exam:', error);
       const errText = error.response?.data?.detail || error.message || '시험 기록 추가 중 오류가 발생했습니다.';
@@ -287,18 +276,21 @@ const StudentList: React.FC = () => {
 
   const handleStudentSelectForExam = async (student: Student) => {
     setSelectedStudent(student);
-    setNewExam({
-      name: '',
-      category: 'REVIEW',
-      score: null,
-      max_score: 100,
-      grade: null,
-      attendance: null,
-    });
     setError('');
     try {
       const attendances = await studentAPI.getAttendanceRecords(student.id);
       setStudentAttendances(attendances);
+      
+      // 폼 초기화 및 가장 최근 출석 기록을 기본값으로 설정
+      setNewExam({
+        name: '',
+        category: 'REVIEW',
+        score: 0,
+        max_score: 100,
+        grade: 'A',
+        attendance: attendances.length > 0 ? attendances[0].id : null,
+      });
+
       setOpenExamDialog(true);
     } catch (error: any) {
       setSnackbar({ open: true, message: '출석 기록을 불러오는 중 오류가 발생했습니다.', severity: 'error' });
@@ -424,36 +416,36 @@ const StudentList: React.FC = () => {
         <Table stickyHeader>
           <TableHead>
             <TableRow>
-              <TableCell>ID</TableCell>
-              <TableCell>이름</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>ID</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>이름</TableCell>
               <TableCell>수강 반</TableCell>
-              <TableCell>부모님 전화번호</TableCell>
-              <TableCell>학생 전화번호</TableCell>
-              <TableCell>출석률</TableCell>
-              <TableCell>평균 점수</TableCell>
-              <TableCell>관리</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>부모님 전화번호</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>학생 전화번호</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>출석률</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>평균 점수</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>관리</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {filteredStudents.map((student) => (
               <TableRow key={student.id}>
-                <TableCell>{student.id}</TableCell>
-                <TableCell>{student.name}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{student.id}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{student.name}</TableCell>
                 <TableCell>
                   {student.classes.map(classId => {
                     const className = classes.find(c => c.id === classId)?.name;
                     return <Chip key={classId} label={className || '알 수 없는 반'} size="small" sx={{ mr: 0.5, mb: 0.5 }} />;
                   })}
                 </TableCell>
-                <TableCell>{student.parent_phone}</TableCell>
-                <TableCell>{student.student_phone || '-'}</TableCell>
-                <TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{student.parent_phone}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{student.student_phone || '-'}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>
                   {student.attendance_stats.total_classes > 0 
                     ? `${Math.round((student.attendance_stats.attended_classes / student.attendance_stats.total_classes) * 100)}%`
                     : '0%'}
                 </TableCell>
-                <TableCell>{student.exam_stats.average_score}점</TableCell>
-                <TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{student.exam_stats.average_score}점</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>
                   <Box sx={{ display: 'flex', gap: 0.5 }}>
                     <Tooltip title="출석 기록 추가"><IconButton size="small" onClick={() => { setSelectedStudent(student); setOpenAttendanceDialog(true); }} color="info"><AssignmentIcon /></IconButton></Tooltip>
                     <Tooltip title="시험 기록 추가"><IconButton size="small" onClick={() => handleStudentSelectForExam(student)} color="warning"><SchoolIcon /></IconButton></Tooltip>
@@ -537,87 +529,102 @@ const StudentList: React.FC = () => {
             </Dialog>
       
       {/* 시험 기록 개별 추가 다이얼로그 */}
-      <Dialog 
-        open={openExamDialog} 
-        onClose={() => setOpenExamDialog(false)} 
-        maxWidth="md" 
-        fullWidth
-      >
+      <Dialog open={openExamDialog} onClose={() => setOpenExamDialog(false)} sx={{ '& .MuiDialog-paper': { width: '500px' } }}>
         <DialogTitle>시험 기록 추가: {selectedStudent?.name}</DialogTitle>
         <DialogContent>
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-          <FormControl fullWidth margin="normal">
-            <InputLabel>출석 기록 선택</InputLabel>
+          <FormControl fullWidth sx={{ mt: 2, mb: 2 }}>
+            <InputLabel id="exam-category-label">시험 종류</InputLabel>
             <Select
-              value={newExam.attendance || ''}
-              label="출석 기록 선택"
-              onChange={(e) => handleNewExamChange('attendance', e.target.value)}
-              required
+              labelId="exam-category-label"
+              value={newExam.category}
+              label="시험 종류"
+              onChange={(e) => setNewExam({ ...newExam, category: e.target.value, score: 0, max_score: e.target.value === 'MOCK' ? 50 : 100 })}
             >
-              {studentAttendances.map((attendance) => (
-                <MenuItem key={attendance.id} value={attendance.id}>
-                  {`${attendance.date} - ${attendance.class_info_name || '알 수 없는 반'}`}
-                </MenuItem>
-              ))}
+              <MenuItem value="REVIEW">복습테스트</MenuItem>
+              <MenuItem value="ESSAY">서술테스트</MenuItem>
+              <MenuItem value="ORAL">구술테스트</MenuItem>
+              <MenuItem value="MOCK">모의고사</MenuItem>
+              <MenuItem value="SCHOOL">학교기출</MenuItem>
             </Select>
           </FormControl>
-          
           <TextField
             fullWidth
             label="시험 이름"
             value={newExam.name}
-            onChange={(e) => handleNewExamChange('name', e.target.value)}
-            margin="normal"
+            onChange={(e) => setNewExam({ ...newExam, name: e.target.value })}
+            sx={{ mb: 2 }}
             required
           />
 
-          <FormControl fullWidth margin="normal">
-            <InputLabel>시험 종류</InputLabel>
-            <Select
-              value={newExam.category}
-              label="시험 종류"
-              onChange={(e) => handleNewExamChange('category', e.target.value)}
-            >
-              <MenuItem value="REVIEW">복습테스트</MenuItem>
-              <MenuItem value="SCHOOL">학교기출</MenuItem>
-              <MenuItem value="MOCK">모의고사</MenuItem>
-              <MenuItem value="ESSAY">서술테스트</MenuItem>
-              <MenuItem value="ORAL">구술테스트</MenuItem>
-            </Select>
-          </FormControl>
-
-          {(newExam.category === 'REVIEW' || newExam.category === 'SCHOOL' || newExam.category === 'MOCK') && (
+          {(newExam.category === 'REVIEW' || newExam.category === 'SCHOOL') && (
             <>
               <TextField
                 fullWidth
                 type="number"
-                label="점수"
-                value={newExam.score || ''}
-                onChange={(e) => handleNewExamChange('score', e.target.value === '' ? null : Number(e.target.value))}
-                margin="normal"
-                required
+                label="만점"
+                value={newExam.max_score}
+                onChange={(e) => {
+                  const value = Number(e.target.value);
+                  if (value > 0) {
+                    setNewExam({ ...newExam, max_score: value });
+                  }
+                }}
+                inputProps={{ min: 1 }}
+                sx={{ mb: 2 }}
               />
               <TextField
                 fullWidth
                 type="number"
+                label="점수"
+                value={newExam.score}
+                onChange={(e) => {
+                  const value = Number(e.target.value);
+                  if (value >= 0 && value <= newExam.max_score) {
+                    setNewExam({ ...newExam, score: value });
+                  }
+                }}
+                inputProps={{ min: 0, max: newExam.max_score }}
+                sx={{ mb: 2 }}
+              />
+            </>
+          )}
+
+          {newExam.category === 'MOCK' && (
+            <>
+              <TextField
+                fullWidth
+                type="number"
                 label="만점"
-                value={newExam.max_score || ''}
-                onChange={(e) => handleNewExamChange('max_score', e.target.value === '' ? null : Number(e.target.value))}
-                margin="normal"
-                required
-                disabled={newExam.category === 'MOCK'}
+                value={50}
+                disabled
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                fullWidth
+                type="number"
+                label="점수"
+                value={newExam.score}
+                onChange={(e) => {
+                  const value = Number(e.target.value);
+                  if (value >= 0 && value <= 50) {
+                    setNewExam({ ...newExam, score: value });
+                  }
+                }}
+                inputProps={{ min: 0, max: 50 }}
+                sx={{ mb: 2 }}
               />
             </>
           )}
 
           {(newExam.category === 'ESSAY' || newExam.category === 'ORAL') && (
-            <FormControl fullWidth margin="normal">
-              <InputLabel>등급</InputLabel>
+            <FormControl fullWidth sx={{ mb: 2 }}>
+              <InputLabel id="exam-grade-label">등급</InputLabel>
               <Select
-                value={newExam.grade || ''}
+                labelId="exam-grade-label"
+                value={newExam.grade}
                 label="등급"
-                onChange={(e) => handleNewExamChange('grade', e.target.value)}
-                required
+                onChange={(e) => setNewExam({ ...newExam, grade: e.target.value })}
               >
                 <MenuItem value="A+">A+</MenuItem>
                 <MenuItem value="A">A</MenuItem>
@@ -633,10 +640,35 @@ const StudentList: React.FC = () => {
               </Select>
             </FormControl>
           )}
+          
+          <FormControl fullWidth>
+            <InputLabel id="attendance-label">출석 기록 선택</InputLabel>
+            <Select
+              labelId="attendance-label"
+              value={newExam.attendance || ''}
+              label="출석 기록 선택"
+              onChange={(e) => setNewExam({ ...newExam, attendance: e.target.value as number })}
+              MenuProps={{
+                PaperProps: {
+                  style: {
+                    maxHeight: 300,
+                  },
+                },
+              }}
+            >
+              {studentAttendances.map((attendance) => (
+                <MenuItem key={attendance.id} value={attendance.id}>
+                  {`${attendance.date} - ${attendance.class_info_name || '알 수 없는 반'}`}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenExamDialog(false)}>취소</Button>
-          <Button onClick={handleExamSubmit} variant="contained">추가</Button>
+          <Button onClick={handleExamSubmit} variant="contained">
+            추가
+          </Button>
         </DialogActions>
       </Dialog>
       
