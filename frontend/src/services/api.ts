@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://localhost:8000/api";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 // 진행 중인 요청을 추적하는 캐시
 const pendingRequests = new Map<string, Promise<any>>();
