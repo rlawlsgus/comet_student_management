@@ -1,6 +1,12 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <script>
+      const correctHost = 'student.comet-science.com';
+      if (window.location.hostname !== correctHost) {
+        window.location.replace('https://' + correctHost + window.location.pathname + window.location.search);
+      }
+    </script>
     <meta charset="utf-8" />
     <link rel="icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -9,9 +15,10 @@
       name="description"
       content="Web site created using create-react-app"
     />
+    <meta name="robots" content="noindex, nofollow">
     <link rel="apple-touch-icon" href="/logo192.png" />
     <link rel="manifest" href="/manifest.json" />
-    <title>Vite React App</title>
+    <title>혜성과학 학생 관리</title>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
