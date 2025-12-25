@@ -290,7 +290,7 @@ class StudentSerializer(serializers.ModelSerializer):
             "highest_score": max(scores),
             "lowest_score": min(scores),
         }
-        
+
     def to_representation(self, instance):
         ret = super().to_representation(instance)
         request = self.context.get("request")
@@ -299,9 +299,9 @@ class StudentSerializer(serializers.ModelSerializer):
         if user and user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
             class_ids = ret.get("classes", [])
             filtered_class_ids = list(
-                Class.objects.filter(id__in=class_ids, subject=user.subject).values_list(
-                    "id", flat=True
-                )
+                Class.objects.filter(
+                    id__in=class_ids, subject=user.subject
+                ).values_list("id", flat=True)
             )
             ret["classes"] = filtered_class_ids
         return ret
@@ -442,7 +442,9 @@ class ExamSerializer(serializers.ModelSerializer):
 
         elif category in [Exam.Category.ESSAY, Exam.Category.ORAL]:
             if grade is None:
-                raise serializers.ValidationError("서술/구술 테스트에는 등급이 필요합니다.")
+                raise serializers.ValidationError(
+                    "서술/구술 테스트에는 등급이 필요합니다."
+                )
             if score is not None or max_score is not None:
                 raise serializers.ValidationError(
                     "등급 기반 시험에는 점수나 만점을 입력할 수 없습니다."
@@ -455,7 +457,9 @@ class ExamSerializer(serializers.ModelSerializer):
             if score is None:
                 raise serializers.ValidationError("모의고사에는 점수가 필요합니다.")
             if grade is not None:
-                raise serializers.ValidationError("모의고사에는 등급을 입력할 수 없습니다.")
+                raise serializers.ValidationError(
+                    "모의고사에는 등급을 입력할 수 없습니다."
+                )
             data["max_score"] = 50  # 모의고사는 만점 50점으로 고정
             if score > data["max_score"]:
                 raise serializers.ValidationError("점수는 만점을 초과할 수 없습니다.")
@@ -490,19 +494,19 @@ class StudentDetailSerializer(StudentSerializer):
     def get_exam_records(self, obj):
         request = self.context.get("request")
         user = request.user if request else None
-        
+
         exams = Exam.objects.filter(attendance__student=obj).order_by(
             "-attendance__date"
         )
         if user and user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
             exams = exams.filter(attendance__class_info__subject=user.subject)
-            
+
         return ExamSerializer(exams, many=True, context=self.context).data
-    
+
     def to_representation(self, instance):
         # Call the grandparent's to_representation to avoid parent's logic
         ret = super(StudentSerializer, self).to_representation(instance)
-        
+
         request = self.context.get("request")
         user = request.user if request else None
 
@@ -510,14 +514,10 @@ class StudentDetailSerializer(StudentSerializer):
         classes_queryset = instance.classes.all()
         if user and user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
             classes_queryset = classes_queryset.filter(subject=user.subject)
-        
+
         # Serialize the filtered classes and assign to the 'classes' field
-        ret['classes'] = ClassForStudentDetailSerializer(classes_queryset, many=True).data
-        
+        ret["classes"] = ClassForStudentDetailSerializer(
+            classes_queryset, many=True
+        ).data
+
         return ret
-
-
-class DashboardStatsSerializer(serializers.Serializer):
-    class_stats = serializers.ListField(child=serializers.DictField())
-    attendance_stats = serializers.ListField(child=serializers.DictField())
-    grade_stats = serializers.ListField(child=serializers.DictField())

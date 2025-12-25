@@ -384,6 +384,19 @@ export const notificationAPI = {
     });
   },
 
+  // 일괄 알림톡 미리보기
+  getBulkNotificationPreview: async (studentIds: number[], targetDate: string) => {
+    return apiCall("/notifications/", {
+      method: "POST",
+      body: JSON.stringify({
+        type: "bulk",
+        student_ids: studentIds,
+        target_date: targetDate,
+        preview: true,
+      }),
+    });
+  },
+
   // 일괄 알림톡 전송
   sendBulkNotification: async (studentIds: number[], targetDate: string) => {
     return apiCall("/notifications/", {
@@ -392,6 +405,7 @@ export const notificationAPI = {
         type: "bulk",
         student_ids: studentIds,
         target_date: targetDate,
+        preview: false,
       }),
     });
   },

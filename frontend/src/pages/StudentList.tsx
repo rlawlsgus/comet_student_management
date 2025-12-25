@@ -84,7 +84,7 @@ const StudentList: React.FC = () => {
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [studentAttendances, setStudentAttendances] = useState<any[]>([]);
   const [error, setError] = useState<string>('');
-  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' | 'warning' }>({
     open: false,
     message: '',
     severity: 'success',
@@ -310,59 +310,42 @@ const StudentList: React.FC = () => {
       setLoadingSendData(true);
       setError('');
       const today = format(new Date(), 'yyyy-MM-dd');
+      const studentIds = filteredStudents.map(s => s.id);
       
-      const studentPromises = filteredStudents.map(async (student) => {
-        const attendances = await studentAPI.getAttendanceRecords(student.id);
-        const todayAttendances = attendances.filter((att: any) => att.date === today);
-        
-        if (todayAttendances.length > 0) {
-          const exams = await studentAPI.getExamRecords(student.id);
-          const todayExams = exams.filter((exam: any) => exam.exam_date === today);
-          
-          const attendanceWithExams = todayAttendances.map(async (att: any) => {
-            const classExams = todayExams.filter((ex: any) => ex.attendance === att.id);
-            const examAverages = await examAPI.getExamAverages(undefined, att.class_info);
-            
-            const examsWithAverages = classExams.map((exam: any) => {
-              const examAverage = examAverages.find((avg: any) => avg.name === exam.name);
-              return { ...exam, ...examAverage };
-            });
-            return { student, attendance: att, exams: examsWithAverages };
-          });
-          return Promise.all(attendanceWithExams);
-        }
-        return null;
-      });
+      const previewData = await notificationAPI.getBulkNotificationPreview(studentIds, today);
 
-      const results = (await Promise.all(studentPromises)).flat().filter(Boolean);
-
-      if (results.length === 0) {
-        setSnackbar({ open: true, message: '오늘 출석 기록이 있는 학생이 없습니다.', severity: 'error' });
+      if (!previewData || previewData.length === 0) {
+        setSnackbar({ open: true, message: '오늘 출석 기록이 있는 학생이 없습니다.', severity: 'info' });
         return;
       }
 
-      setSendTargets(results as any[]);
+      setSendTargets(previewData);
       setOpenSendDialog(true);
     } catch (error: any) {
-      setSnackbar({ open: true, message: '전송 데이터를 불러오는 중 오류가 발생했습니다.', severity: 'error' });
+      const errorMessage = error.message || '전송 데이터를 불러오는 중 오류가 발생했습니다.';
+      setSnackbar({ open: true, message: errorMessage, severity: 'error' });
     } finally {
       setLoadingSendData(false);
     }
   };
   
   const handleSendKakaoNotification = async () => {
-    // This logic needs to be revisited as a student might have multiple attendances
-    // For now, we'll send a notification for each attendance record.
     try {
-      const responses = await Promise.all(sendTargets.map(target => 
-        notificationAPI.sendSingleNotification(target.student.id, target.attendance.id)
-      ));
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const studentIds = sendTargets.map(target => target.student.id);
+
+      if (studentIds.length === 0) {
+        setSnackbar({ open: true, message: '전송할 대상이 없습니다.', severity: 'warning' });
+        return;
+      }
+
+      const response = await notificationAPI.sendBulkNotification(studentIds, today);
       
-      const successCount = responses.filter(r => r.message).length;
-      setSnackbar({ open: true, message: `${successCount}건의 알림톡이 성공적으로 전송되었습니다.`, severity: 'success' });
+      setSnackbar({ open: true, message: response.message || '알림톡이 성공적으로 전송되었습니다.', severity: 'success' });
       setOpenSendDialog(false);
     } catch (error: any) {
-      setSnackbar({ open: true, message: '알림톡 전송 중 오류가 발생했습니다.', severity: 'error' });
+      const errorMessage = error.message || '알림톡 전송 중 오류가 발생했습니다.';
+      setSnackbar({ open: true, message: errorMessage, severity: 'error' });
     }
   };
 
