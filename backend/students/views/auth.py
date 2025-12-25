@@ -3,11 +3,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.contrib.auth import login, logout
 from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 
 from ..serializers import LoginSerializer, UserSerializer
 
 
+@method_decorator(ensure_csrf_cookie, name="dispatch")
 @method_decorator(csrf_exempt, name="dispatch")
 class LoginView(APIView):
     permission_classes = [permissions.AllowAny]

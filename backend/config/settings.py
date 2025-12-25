@@ -168,6 +168,8 @@ if not DEBUG:
     SESSION_COOKIE_SAMESITE = "None"
     CSRF_COOKIE_SAMESITE = "None"
     CSRF_COOKIE_HTTPONLY = False
+    CSRF_COOKIE_DOMAIN = ".comet-science.com"
+    SESSION_COOKIE_DOMAIN = ".comet-science.com"
 
     # HSTS Settings
     SECURE_HSTS_SECONDS = 31536000  # 1 year
