@@ -42,19 +42,24 @@ python manage.py runserver
 ```bash
 cd frontend
 npm install
-npm start
+npm run dev
 ```
 
 ## 환경 변수 설정
 
-`.env` 파일을 생성하고 다음 변수들을 설정하세요:
+backend 폴더에 `.env` 파일을 생성하고 다음 변수들을 설정하세요:
 
 ```
-DB_NAME=your_db_name
-DB_USER=your_db_user
-DB_PASSWORD=your_db_password
-DB_HOST=your_db_host
-DB_PORT=3306
+SECRET_KEY='django-insecure-your-secret-key'
+DEBUG=True
+ALLOWED_HOSTS=localhost,127.0.0.1
+CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+```
+
+frontend 폴더에 `.env.local` 파일을 생성하고 다음 변수들을 설정하세요:
+
+```
+VITE_API_BASE_URL=http://localhost:8000/api
 ```
 
 ## 개발 환경
