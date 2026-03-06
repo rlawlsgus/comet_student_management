@@ -140,18 +140,10 @@ class AlimtalkService:
     def send(self, notification_data, retry=True):
         payload = self._build_payload(notification_data)
         if not payload:
-            print("Alimtalk Error: Payload generation failed (check phone number)")
             return False
-
-        print(f"--- BizM Alimtalk Request (Single) ---")
-        print(f"URL: {self.api_url}")
-        print(f"Headers: {self.headers}")
-        print(f"Payload: {[payload]}")
 
         try:
             res = requests.post(self.api_url, headers=self.headers, json=[payload])
-            print(f"Response Status: {res.status_code}")
-            print(f"Response JSON: {res.json()}")
             res.raise_for_status()
 
             result = res.json()
@@ -163,12 +155,8 @@ class AlimtalkService:
                 return True
 
             if retry:
-                print(
-                    f"Retrying Alimtalk send for {notification_data['student']['name']}..."
-                )
                 return self.send(notification_data, retry=False)
-        except Exception as e:
-            print(f"Alimtalk Request Exception: {str(e)}")
+        except:
             if retry:
                 return self.send(notification_data, retry=False)
         return False
@@ -179,10 +167,6 @@ class AlimtalkService:
             p = self._build_payload(item)
             if p:
                 valid_items.append({"idx": idx, "payload": p})
-            else:
-                print(
-                    f"Alimtalk Bulk Error: Payload generation failed for student index {idx}"
-                )
 
         success_count = 0
         failed_indices = []
@@ -190,12 +174,10 @@ class AlimtalkService:
         # 1차 전송 (100건 단위)
         for i in range(0, len(valid_items), 100):
             chunk = valid_items[i : i + 100]
-            print(f"--- BizM Alimtalk Bulk Request (Chunk {i//100 + 1}) ---")
             success_count += self._post_chunk(chunk, failed_indices)
 
         # 실패 건 재시도
         if failed_indices:
-            print(f"Retrying {len(failed_indices)} failed items in bulk send...")
             retry_items = [
                 {"idx": -1, "payload": self._build_payload(bulk_data[idx])}
                 for idx in failed_indices
@@ -207,12 +189,9 @@ class AlimtalkService:
 
     def _post_chunk(self, chunk, failed_log):
         payload_chunk = [c["payload"] for c in chunk]
-        print(f"Payload Chunk size: {len(payload_chunk)}")
 
         try:
             res = requests.post(self.api_url, headers=self.headers, json=payload_chunk)
-            print(f"Response Status: {res.status_code}")
-            print(f"Response JSON: {res.json()}")
             res.raise_for_status()
 
             chunk_success = 0
@@ -220,11 +199,9 @@ class AlimtalkService:
                 if r.get("code") == "success":
                     chunk_success += 1
                 elif c["idx"] != -1:
-                    print(f"Item Failed in Chunk: {r}")
                     failed_log.append(c["idx"])
             return chunk_success
-        except Exception as e:
-            print(f"Alimtalk Chunk Request Exception: {str(e)}")
+        except:
             if chunk and chunk[0]["idx"] != -1:
                 failed_log.extend([c["idx"] for c in chunk])
             return 0
