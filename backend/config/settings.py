@@ -194,3 +194,9 @@ REST_FRAMEWORK = {
         "rest_framework.authentication.BasicAuthentication",
     ],
 }
+
+# BizM Alimtalk Settings
+BIZM_API_URL = os.getenv("BIZM_API_URL", "https://alimtalk-api.bizmsg.kr/v2/sender/send")
+BIZM_USER_ID = os.getenv("BIZM_USER_ID", "")
+BIZM_PROFILE_KEY = os.getenv("BIZM_PROFILE_KEY", "")
+BIZM_TEMPLATE_ID = os.getenv("BIZM_TEMPLATE_ID", "")

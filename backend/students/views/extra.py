@@ -2,415 +2,417 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db.models import Avg, Max, Min, Count
+from django.conf import settings
 from datetime import date
 import requests
+import calendar
 
 from ..models import User, Class, Student, Attendance, Exam
 
 
 class DashboardView(APIView):
+    """
+    학원 대시보드 통계 뷰
+    """
+
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         user = request.user
-        class_id = request.query_params.get("class_id", None)
-        month_param = request.query_params.get("month", None)
+        class_id = request.query_params.get("class_id")
+        month_param = request.query_params.get("month")
 
+        target_month = self._parse_target_month(month_param)
+        classes = self._get_accessible_classes(user)
+
+        response_data = {
+            "class_stats": self._get_class_list_stats(classes),
+            "attendance_stats": [],
+            "grade_stats": [],
+        }
+
+        if class_id:
+            selected_class = classes.filter(id=class_id).first()
+            if selected_class:
+                first_day, last_day = self._get_month_range(target_month)
+                response_data["attendance_stats"] = self._get_attendance_stats(
+                    selected_class, first_day, last_day
+                )
+                response_data["grade_stats"] = self._get_grade_stats(
+                    selected_class, first_day, last_day
+                )
+
+        return Response(response_data)
+
+    def _parse_target_month(self, month_param):
         if month_param:
             try:
                 year, month = map(int, month_param.split("-"))
-                target_month = date(year, month, 1)
+                return date(year, month, 1)
             except (ValueError, TypeError):
-                target_month = date.today()
-        else:
-            target_month = date.today()
+                pass
+        return date.today().replace(day=1)
 
+    def _get_accessible_classes(self, user):
         classes = Class.objects.all()
         if user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
-            classes = classes.filter(subject=user.subject)
+            return classes.filter(subject=user.subject)
+        return classes
 
-        class_stats = []
-        for class_obj in classes:
-            student_count = class_obj.students.count()
-            class_stats.append(
-                {
-                    "id": class_obj.id,
-                    "name": class_obj.name,
-                    "subject": class_obj.subject,
-                    "student_count": student_count,
-                }
-            )
-
-        attendance_stats = []
-        if class_id:
-            selected_class = Class.objects.filter(id=class_id).first()
-            if selected_class and (
-                user.role == User.Role.ADMIN or selected_class.subject == user.subject
-            ):
-                students = Student.objects.filter(classes__id=class_id)
-                import calendar
-
-                first_day = date(target_month.year, target_month.month, 1)
-                last_day = date(
-                    target_month.year,
-                    target_month.month,
-                    calendar.monthrange(target_month.year, target_month.month)[1],
-                )
-
-                monthly_attendances = Attendance.objects.filter(
-                    class_info_id=class_id,
-                    date__gte=first_day,
-                    date__lte=last_day,
-                ).order_by("date")
-
-                attendance_by_date = {}
-                for attendance in monthly_attendances:
-                    date_str = attendance.date.strftime("%Y-%m-%d")
-                    if date_str not in attendance_by_date:
-                        attendance_by_date[date_str] = {
-                            "present": 0,
-                            "late": 0,
-                            "absent": 0,
-                        }
-                    if attendance.is_late:
-                        attendance_by_date[date_str]["late"] += 1
-                    else:
-                        attendance_by_date[date_str]["present"] += 1
-
-                total_students = students.count()
-                for date_str in attendance_by_date:
-                    attendance_by_date[date_str]["absent"] = (
-                        total_students
-                        - attendance_by_date[date_str]["present"]
-                        - attendance_by_date[date_str]["late"]
-                    )
-
-                for date_str in sorted(attendance_by_date.keys()):
-                    attendance_stats.append(
-                        {
-                            "date": date_str,
-                            "present": attendance_by_date[date_str]["present"],
-                            "absent": attendance_by_date[date_str]["absent"],
-                            "late": attendance_by_date[date_str]["late"],
-                        }
-                    )
-
-        grade_stats = []
-        if class_id:
-            selected_class = Class.objects.filter(id=class_id).first()
-            if selected_class and (
-                user.role == User.Role.ADMIN or selected_class.subject == user.subject
-            ):
-                import calendar
-
-                first_day = date(target_month.year, target_month.month, 1)
-                last_day = date(
-                    target_month.year,
-                    target_month.month,
-                    calendar.monthrange(target_month.year, target_month.month)[1],
-                )
-
-                recent_exams = Exam.objects.filter(
-                    attendance__class_info_id=class_id,
-                    attendance__date__gte=first_day,
-                    attendance__date__lte=last_day,
-                ).order_by("-attendance__date", "-id")
-
-                if recent_exams.exists():
-                    exam_stats = {}
-                    for exam in recent_exams:
-                        exam_name = exam.name
-                        if exam_name not in exam_stats:
-                            exam_stats[exam_name] = []
-                        exam_stats[exam_name].append(exam.score)
-
-                    for exam_name, scores in exam_stats.items():
-                        valid_scores = [s for s in scores if s is not None]
-                        grade_stats.append(
-                            {
-                                "exam_name": exam_name,
-                                "average": (
-                                    sum(valid_scores) // len(valid_scores)
-                                    if valid_scores
-                                    else 0
-                                ),
-                                "highest": max(valid_scores) if valid_scores else 0,
-                                "lowest": min(valid_scores) if valid_scores else 0,
-                                "count": len(scores),  # 전체 시험 수
-                            }
-                        )
-
-        return Response(
+    def _get_class_list_stats(self, classes):
+        return [
             {
-                "class_stats": class_stats,
-                "attendance_stats": attendance_stats,
-                "grade_stats": grade_stats,
+                "id": c.id,
+                "name": c.name,
+                "subject": c.subject,
+                "student_count": c.students.count(),
             }
+            for c in classes
+        ]
+
+    def _get_month_range(self, target_month):
+        first_day = target_month.replace(day=1)
+        last_day = target_month.replace(
+            day=calendar.monthrange(target_month.year, target_month.month)[1]
         )
+        return first_day, last_day
+
+    def _get_attendance_stats(self, selected_class, first_day, last_day):
+        attendances = Attendance.objects.filter(
+            class_info=selected_class, date__range=(first_day, last_day)
+        ).order_by("date")
+
+        total_students = selected_class.students.count()
+        stats_by_date = {}
+
+        for att in attendances:
+            d_str = att.date.strftime("%Y-%m-%d")
+            if d_str not in stats_by_date:
+                stats_by_date[d_str] = {"present": 0, "late": 0, "absent": 0}
+
+            if att.is_late:
+                stats_by_date[d_str]["late"] += 1
+            else:
+                stats_by_date[d_str]["present"] += 1
+
+        result = []
+        for d_str, counts in sorted(stats_by_date.items()):
+            counts["absent"] = total_students - (counts["present"] + counts["late"])
+            result.append({"date": d_str, **counts})
+        return result
+
+    def _get_grade_stats(self, selected_class, first_day, last_day):
+        recent_exams = Exam.objects.filter(
+            attendance__class_info=selected_class,
+            attendance__date__range=(first_day, last_day),
+        ).exclude(score__isnull=True)
+
+        exam_groups = {}
+        for exam in recent_exams:
+            if exam.name not in exam_groups:
+                exam_groups[exam.name] = []
+            exam_groups[exam.name].append(exam.score)
+
+        return [
+            {
+                "exam_name": name,
+                "average": sum(scores) // len(scores) if scores else 0,
+                "highest": max(scores) if scores else 0,
+                "lowest": min(scores) if scores else 0,
+                "count": len(scores),
+            }
+            for name, scores in exam_groups.items()
+        ]
+
+
+class AlimtalkService:
+    """
+    비즈엠 알림톡 발송 서비스 엔진
+    """
+
+    def __init__(self):
+        self.api_url = settings.BIZM_API_URL
+        self.user_id = settings.BIZM_USER_ID
+        self.profile_key = settings.BIZM_PROFILE_KEY
+        self.template_id = settings.BIZM_TEMPLATE_ID
+        self.headers = {"Content-type": "application/json", "userid": self.user_id}
+
+    def send(self, notification_data, retry=True):
+        payload = self._build_payload(notification_data)
+        if not payload:
+            print("Alimtalk Error: Payload generation failed (check phone number)")
+            return False
+
+        print(f"--- BizM Alimtalk Request (Single) ---")
+        print(f"URL: {self.api_url}")
+        print(f"Headers: {self.headers}")
+        print(f"Payload: {[payload]}")
+
+        try:
+            res = requests.post(self.api_url, headers=self.headers, json=[payload])
+            print(f"Response Status: {res.status_code}")
+            print(f"Response JSON: {res.json()}")
+            res.raise_for_status()
+
+            result = res.json()
+            if (
+                result
+                and isinstance(result, list)
+                and result[0].get("code") == "success"
+            ):
+                return True
+
+            if retry:
+                print(
+                    f"Retrying Alimtalk send for {notification_data['student']['name']}..."
+                )
+                return self.send(notification_data, retry=False)
+        except Exception as e:
+            print(f"Alimtalk Request Exception: {str(e)}")
+            if retry:
+                return self.send(notification_data, retry=False)
+        return False
+
+    def send_bulk(self, bulk_data):
+        valid_items = []
+        for idx, item in enumerate(bulk_data):
+            p = self._build_payload(item)
+            if p:
+                valid_items.append({"idx": idx, "payload": p})
+            else:
+                print(
+                    f"Alimtalk Bulk Error: Payload generation failed for student index {idx}"
+                )
+
+        success_count = 0
+        failed_indices = []
+
+        # 1차 전송 (100건 단위)
+        for i in range(0, len(valid_items), 100):
+            chunk = valid_items[i : i + 100]
+            print(f"--- BizM Alimtalk Bulk Request (Chunk {i//100 + 1}) ---")
+            success_count += self._post_chunk(chunk, failed_indices)
+
+        # 실패 건 재시도
+        if failed_indices:
+            print(f"Retrying {len(failed_indices)} failed items in bulk send...")
+            retry_items = [
+                {"idx": -1, "payload": self._build_payload(bulk_data[idx])}
+                for idx in failed_indices
+            ]
+            for i in range(0, len(retry_items), 100):
+                success_count += self._post_chunk(retry_items[i : i + 100], [])
+
+        return success_count
+
+    def _post_chunk(self, chunk, failed_log):
+        payload_chunk = [c["payload"] for c in chunk]
+        print(f"Payload Chunk size: {len(payload_chunk)}")
+
+        try:
+            res = requests.post(self.api_url, headers=self.headers, json=payload_chunk)
+            print(f"Response Status: {res.status_code}")
+            print(f"Response JSON: {res.json()}")
+            res.raise_for_status()
+
+            chunk_success = 0
+            for r, c in zip(res.json(), chunk):
+                if r.get("code") == "success":
+                    chunk_success += 1
+                elif c["idx"] != -1:
+                    print(f"Item Failed in Chunk: {r}")
+                    failed_log.append(c["idx"])
+            return chunk_success
+        except Exception as e:
+            print(f"Alimtalk Chunk Request Exception: {str(e)}")
+            if chunk and chunk[0]["idx"] != -1:
+                failed_log.extend([c["idx"] for c in chunk])
+            return 0
+
+    def _build_payload(self, data):
+        phone = self._format_phone(data["student"]["parent_phone"])
+        if not phone:
+            return None
+
+        msg = self._generate_msg(data)
+        return {
+            "message_type": "AT",
+            "phn": phone,
+            "profile": self.profile_key,
+            "tmplId": self.template_id,
+            "msg": msg,
+            "smsKind": "N",
+        }
+
+    def _format_phone(self, phone):
+        if not phone:
+            return ""
+        cleaned = phone.replace("-", "").replace(" ", "")
+        return "82" + cleaned[1:] if cleaned.startswith("010") else cleaned
+
+    def _generate_msg(self, data):
+        st_name = data["student"]["name"]
+        att = data["attendance"]
+
+        # 과목명 - 수업종류 (예: 화학 - 정규)
+        subject_name = att.get("subject_display", "미지정")
+        # 생명 -> 생명과학, 지학 -> 지구과학으로 매핑 (사용자 요청 반영)
+        if subject_name == "생명":
+            subject_name = "생명과학"
+        elif subject_name == "지학":
+            subject_name = "지구과학"
+
+        class_type_info = f"{subject_name} - {att['class_type_display']}"
+
+        exam_lines = []
+        for e in data["exams"]:
+            if e["score"] is not None:
+                avg = round(e["class_average"], 1) if e.get("class_average") else "-"
+                high = e["class_max_score"] if e.get("class_max_score") else "-"
+                exam_lines.append(
+                    f"- {e['name']}: {e['score']}점 / {e['max_score']}점\n  (반 평균: {avg}점 / 최고: {high}점)"
+                )
+            elif e["grade"]:
+                exam_lines.append(f"- {e['name']}: {e['grade']} 등급")
+            else:
+                exam_lines.append(f"- {e['name']}: 평가 완료")
+
+        exam_details = (
+            "\n".join(exam_lines) if exam_lines else "진행된 테스트가 없습니다."
+        )
+
+        return f"""{st_name} 학생 수업 결과 보고서
+
+■ 수업 일시: {att['date']}
+■ 수업 종류: {class_type_info}
+■ 출석 상태: {'지각' if att['is_late'] else '출석'}
+■ 숙제 이행도: {att['homework_completion']}%
+■ 숙제 정확도: {att['homework_accuracy']}%
+
+■ 수업 내용:
+{att['content'] or '내용 없음'}
+
+■ 테스트 상세 결과:
+{exam_details}"""
 
 
 class KakaoNotificationView(APIView):
+    """
+    카카오 알림톡 발송 뷰 (단건/일괄)
+    """
+
     permission_classes = [permissions.IsAuthenticated]
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.alimtalk = AlimtalkService()
+
     def post(self, request):
-        user = request.user
-        notification_type = request.data.get("type")
-
-        if notification_type == "single":
-            return self._send_single_notification(request, user)
-        elif notification_type == "bulk":
-            if request.data.get("preview"):
-                return self._preview_bulk_notification(request, user)
-            return self._send_bulk_notification(request, user)
-        else:
-            return Response(
-                {"detail": "잘못된 전송 타입입니다."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-    def _send_single_notification(self, request, user):
-        student_id = request.data.get("student_id")
-        attendance_id = request.data.get("attendance_id")
-
-        if not student_id or not attendance_id:
-            return Response(
-                {"detail": "학생 ID와 출석 기록 ID가 필요합니다."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
+        mode = request.data.get("type")
         try:
-            student = Student.objects.get(id=student_id)
-            attendance = Attendance.objects.get(id=attendance_id, student=student)
-
-            if user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
-                if (
-                    not attendance.class_info
-                    or attendance.class_info.subject != user.subject
-                ):
-                    return Response(
-                        {"detail": "해당 학생의 알림톡을 전송할 권한이 없습니다."},
-                        status=status.HTTP_403_FORBIDDEN,
-                    )
-
-            related_exams = Exam.objects.filter(attendance=attendance)
-
-            exam_averages = (
-                Exam.objects.filter(
-                    attendance__class_info=attendance.class_info,
-                    name__in=related_exams.values_list("name", flat=True),
-                )
-                .values("name")
-                .annotate(
-                    average_score=Avg("score"),
-                    max_score=Max("score"),
-                    min_score=Min("score"),
-                    count=Count("id"),
-                )
-            )
-
-            notification_data = {
-                "student": {
-                    "id": student.id,
-                    "name": student.name,
-                    "parent_phone": student.parent_phone,
-                },
-                "attendance": {
-                    "id": attendance.id,
-                    "date": attendance.date.strftime("%Y-%m-%d"),
-                    "class_type_display": attendance.get_class_type_display(),
-                    "content": attendance.content,
-                    "is_late": attendance.is_late,
-                    "homework_completion": attendance.homework_completion,
-                    "homework_accuracy": attendance.homework_accuracy,
-                },
-                "exams": [],
-                "sender_role": user.get_role_display(),
-                "sender_name": user.name,
-            }
-
-            for exam in related_exams:
-                exam_average = next(
-                    (avg for avg in exam_averages if avg["name"] == exam.name), None
-                )
-                notification_data["exams"].append(
-                    {
-                        "name": exam.name,
-                        "score": exam.score,
-                        "max_score": exam.max_score,
-                        "exam_date": exam.attendance.date.strftime("%Y-%m-%d"),
-                        "average_score": (
-                            exam_average["average_score"] if exam_average else 0
-                        ),
-                        "class_average": (
-                            exam_average["average_score"] if exam_average else 0
-                        ),
-                        "class_max_score": (
-                            exam_average["max_score"] if exam_average else 0
-                        ),
-                        "class_min_score": (
-                            exam_average["min_score"] if exam_average else 0
-                        ),
-                        "class_count": exam_average["count"] if exam_average else 0,
-                    }
-                )
-
-            success = self._send_bizM_notification(notification_data)
-
-            if success:
-                return Response(
-                    {
-                        "message": f"{student.name} 학생의 알림톡이 성공적으로 전송되었습니다.",
-                        "notification_data": notification_data,
-                    },
-                    status=status.HTTP_200_OK,
-                )
-            else:
-                return Response(
-                    {"detail": "알림톡 전송에 실패했습니다."},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
-
-        except Student.DoesNotExist:
-            return Response(
-                {"detail": "존재하지 않는 학생입니다."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        except Attendance.DoesNotExist:
-            return Response(
-                {"detail": "존재하지 않는 출석 기록입니다."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+            if mode == "single":
+                return self._handle_single(request)
+            if mode == "bulk":
+                return self._handle_bulk(request)
+            return Response({"detail": "Invalid type"}, status=400)
         except Exception as e:
-            return Response(
-                {"detail": f"알림톡 전송 중 오류가 발생했습니다: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+            return Response({"detail": str(e)}, status=500)
 
-    def _preview_bulk_notification(self, request, user):
-        try:
-            preview_data = self._get_bulk_notification_data(request, user)
-            return Response(preview_data, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    def _handle_single(self, request):
+        s_id, a_id = request.data.get("student_id"), request.data.get("attendance_id")
+        if not s_id or not a_id:
+            return Response({"detail": "Missing IDs"}, status=400)
 
-    def _send_bulk_notification(self, request, user):
-        try:
-            bulk_notifications = self._get_bulk_notification_data(request, user)
-            
-            if not bulk_notifications:
-                return Response(
-                    {"detail": "전송할 출석 기록이 없습니다."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        student = Student.objects.get(id=s_id)
+        attendance = Attendance.objects.get(id=a_id, student=student)
 
-            success_count = self._send_bizM_bulk_notification(bulk_notifications)
-            return Response(
-                {
-                    "message": f"{success_count}명의 학생에게 알림톡이 성공적으로 전송되었습니다.",
-                    "total_count": len(bulk_notifications),
-                    "success_count": success_count,
-                },
-                status=status.HTTP_200_OK,
-            )
-        except Exception as e:
-            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        # 권한 체크
+        if request.user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
+            if (
+                not attendance.class_info
+                or attendance.class_info.subject != request.user.subject
+            ):
+                return Response({"detail": "No permission"}, status=403)
 
-    def _get_bulk_notification_data(self, request, user):
+        data = self._prepare_notification_data(student, attendance)
+        if self.alimtalk.send(data):
+            return Response({"message": f"{student.name} 학생 전송 성공", "data": data})
+        return Response({"detail": "발송 실패"}, status=500)
+
+    def _handle_bulk(self, request):
         student_ids = request.data.get("student_ids", [])
         target_date = request.data.get("target_date")
-
         if not student_ids or not target_date:
-            raise Exception("학생 ID 목록과 대상 날짜가 필요합니다.")
+            return Response({"detail": "Missing data"}, status=400)
 
         students = Student.objects.filter(id__in=student_ids)
-        if user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
-            students = students.filter(classes__subject=user.subject).distinct()
+        if request.user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
+            students = students.filter(classes__subject=request.user.subject).distinct()
 
-        if not students.exists():
-            raise Exception("전송할 학생이 없습니다.")
+        bulk_data = []
+        for st in students:
+            att = Attendance.objects.filter(student=st, date=target_date).first()
+            if att:
+                bulk_data.append(self._prepare_notification_data(st, att))
 
-        bulk_notifications = []
-        for student in students:
-            attendance = Attendance.objects.filter(
-                student=student, date=target_date
-            ).first()
-            if attendance:
-                related_exams = Exam.objects.filter(attendance=attendance)
-                exam_averages = (
-                    Exam.objects.filter(
-                        attendance__class_info=attendance.class_info,
-                        name__in=related_exams.values_list("name", flat=True),
-                    )
-                    .values("name")
-                    .annotate(
-                        average_score=Avg("score"),
-                        max_score=Max("score"),
-                        min_score=Min("score"),
-                        count=Count("id"),
-                    )
-                )
-                notification_data = {
-                    "student": {
-                        "id": student.id,
-                        "name": student.name,
-                        "parent_phone": student.parent_phone,
-                    },
-                    "attendance": {
-                        "id": attendance.id,
-                        "date": attendance.date.strftime("%Y-%m-%d"),
-                        "class_type_display": attendance.get_class_type_display(),
-                        "content": attendance.content,
-                        "is_late": attendance.is_late,
-                        "homework_completion": attendance.homework_completion,
-                        "homework_accuracy": attendance.homework_accuracy,
-                    },
-                    "exams": [],
-                    "sender_role": user.get_role_display(),
-                    "sender_name": user.name,
-                }
-                for exam in related_exams:
-                    exam_average = next(
-                        (avg for avg in exam_averages if avg["name"] == exam.name),
-                        None,
-                    )
-                    notification_data["exams"].append(
-                        {
-                            "name": exam.name,
-                            "score": exam.score,
-                            "max_score": exam.max_score,
-                            "exam_date": exam.attendance.date.strftime("%Y-%m-%d"),
-                            "average_score": (
-                                exam_average["average_score"] if exam_average else 0
-                            ),
-                            "class_average": (
-                                exam_average["average_score"] if exam_average else 0
-                            ),
-                            "class_max_score": (
-                                exam_average["max_score"] if exam_average else 0
-                            ),
-                            "class_min_score": (
-                                exam_average["min_score"] if exam_average else 0
-                            ),
-                            "class_count": (
-                                exam_average["count"] if exam_average else 0
-                            ),
-                        }
-                    )
-                bulk_notifications.append(notification_data)
-        
-        if not bulk_notifications:
-            raise Exception("오늘 날짜의 출석 기록이 있는 학생이 없습니다.")
+        if not bulk_data:
+            return Response({"detail": "No attendance records"}, status=400)
+        if request.data.get("preview"):
+            return Response(bulk_data)
 
-        return bulk_notifications
-
-    def _send_bizM_notification(self, notification_data):
-        # Placeholder for actual API call
-        print(
-            f"BizM 알림톡 전송: {notification_data['student']['name']} -> {notification_data['student']['parent_phone']}"
+        success_count = self.alimtalk.send_bulk(bulk_data)
+        return Response(
+            {
+                "message": f"{success_count}명 전송 성공",
+                "total": len(bulk_data),
+                "success": success_count,
+            }
         )
-        return True
 
-    def _send_bizM_bulk_notification(self, bulk_notifications):
-        # Placeholder for actual API call
-        print(f"BizM 일괄 알림톡 전송: {len(bulk_notifications)}건")
-        return len(bulk_notifications)
+    def _prepare_notification_data(self, student, attendance):
+        related_exams = Exam.objects.filter(attendance=attendance)
+        stats = (
+            Exam.objects.filter(
+                attendance__class_info=attendance.class_info,
+                name__in=related_exams.values_list("name", flat=True),
+            )
+            .values("name")
+            .annotate(avg=Avg("score"), high=Max("score"))
+        )
+
+        exams = []
+        for e in related_exams:
+            s = next((x for x in stats if x["name"] == e.name), {})
+            exams.append(
+                {
+                    "name": e.name,
+                    "score": e.score,
+                    "max_score": e.max_score,
+                    "grade": e.grade,
+                    "class_average": s.get("avg", 0),
+                    "class_max_score": s.get("high", 0),
+                }
+            )
+
+        return {
+            "student": {
+                "id": student.id,
+                "name": student.name,
+                "parent_phone": student.parent_phone,
+            },
+            "attendance": {
+                "id": attendance.id,
+                "date": attendance.date.strftime("%Y-%m-%d"),
+                "class_type_display": attendance.get_class_type_display(),
+                "subject_display": (
+                    attendance.class_info.get_subject_display()
+                    if attendance.class_info
+                    else "미지정"
+                ),
+                "content": attendance.content,
+                "is_late": attendance.is_late,
+                "homework_completion": attendance.homework_completion,
+                "homework_accuracy": attendance.homework_accuracy,
+            },
+            "exams": exams,
+        }

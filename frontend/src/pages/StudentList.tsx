@@ -716,16 +716,21 @@ const StudentList: React.FC = () => {
                       {target.exams.length > 0 && (
                         <>
                           <Divider sx={{ my: 1 }} />
-                          <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'bold' }}>
-                            관련된 시험 기록 ({target.exams.length}개)
+                          <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'bold', color: 'primary.main' }}>
+                            테스트 상세 결과 ({target.exams.length}개)
                           </Typography>
                           {target.exams.map((exam: any, examIndex: number) => (
-                            <Box key={examIndex} sx={{ mb: 1, p: 1, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
+                            <Box key={examIndex} sx={{ mb: 1, p: 1, backgroundColor: '#f9f9f9', borderRadius: 1, border: '1px solid #eee' }}>
                               <Typography variant="body2">
-                                <strong>{exam.name}</strong><br />
-                                점수: <strong>{exam.score}/{exam.max_score}</strong><br />
-                                반 평균: <strong>{Math.round(exam.class_average)}/{exam.max_score}</strong><br />
-                                반 최고점: <strong>{exam.class_max_score}</strong><br />
+                                <strong>- {exam.name}</strong>:{' '}
+                                {exam.grade 
+                                  ? `${exam.grade} 등급` 
+                                  : `${exam.score}/${exam.max_score}점`}
+                                {exam.class_average && !exam.grade && (
+                                  <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                                    (반 평균: {Math.round(exam.class_average * 10) / 10}점 / 최고: {exam.class_max_score}점)
+                                  </Typography>
+                                )}
                               </Typography>
                             </Box>
                           ))}

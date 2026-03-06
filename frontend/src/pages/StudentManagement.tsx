@@ -74,8 +74,6 @@ interface ExamAverage {
   name: string;
   average_score: number;
   max_score: number;
-  min_score: number;
-  count: number;
 }
 
 const StudentManagement: React.FC = () => {
@@ -357,27 +355,28 @@ const StudentManagement: React.FC = () => {
       
       const results = await Promise.allSettled(promises);
       
-      const successfulSends = results.filter(result => result.status === 'fulfilled').length;
-      const failedSends = results.filter(result => result.status === 'rejected').length;
+      const successfulSends = results.filter(result => result.status === 'fulfilled');
+      const failedSends = results.filter(result => result.status === 'rejected');
   
       let message = '';
-      if (successfulSends > 0) {
-        message += `${successfulSends}개의 알림톡 전송에 성공했습니다. `;
+      if (successfulSends.length > 0) {
+        const firstSuccess = (successfulSends[0] as PromiseFulfilledResult<any>).value;
+        const studentName = firstSuccess.data.student.name;
+        const count = successfulSends.length;
+        message += `${studentName} 학생의 알림톡 ${count}건 전송에 성공했습니다. `;
       }
-      if (failedSends > 0) {
-        message += `${failedSends}개의 알림톡 전송에 실패했습니다.`;
+      if (failedSends.length > 0) {
+        message += `${failedSends.length}건의 전송에 실패했습니다.`;
       }
   
       setSnackbar({
         open: true,
         message: message || '알림톡 전송이 완료되었습니다.',
-        severity: failedSends > 0 ? 'error' : 'success',
+        severity: failedSends.length > 0 ? 'error' : 'success',
       });
   
       setOpenSendDialog(false);
       setSelectedAttendances([]);
-      // 성공한 항목만 목록에서 제거하거나, 전체 목록을 새로고침 할 수 있습니다.
-      // 여기서는 전체 데이터를 새로고침합니다.
       fetchStudentData(student.id);
   
     } catch (error: any) {
@@ -907,7 +906,7 @@ const StudentManagement: React.FC = () => {
       <Dialog 
         open={openSendDialog} 
         onClose={() => setOpenSendDialog(false)}
-        maxWidth="md"
+        maxWidth="lg"
         fullWidth
       >
         <DialogTitle>카카오톡 알림톡 전송 확인</DialogTitle>
@@ -928,10 +927,11 @@ const StudentManagement: React.FC = () => {
 
               <Divider sx={{ my: 2 }} />
 
-              <Typography variant="h6" sx={{ mb: 1 }}>
-                전송할 출석 기록 ({selectedAttendances.length}개)
+              <Typography variant="h6" sx={{ mb: 2 }}>
+                전송할 내용 미리보기
               </Typography>
-              <Box sx={{ maxHeight: 400, overflow: 'auto' }}>
+              
+              <Box sx={{ maxHeight: 500, overflow: 'auto', mb: 2 }}>
                 {selectedAttendances.map((attendanceId, index) => {
                   const selectedAttendance = attendances.find(att => att.id === attendanceId);
                   if (!selectedAttendance) return null;
@@ -939,34 +939,48 @@ const StudentManagement: React.FC = () => {
                   const relatedExams = exams.filter(exam => exam.attendance === selectedAttendance.id);
 
                   return (
-                    <Box key={attendanceId} sx={{ mb: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: 2 }}>
-                      <Typography variant="subtitle1" fontWeight="bold">
+                    <Box key={attendanceId} sx={{ mb: 3, p: 2, border: '1px solid #e0e0e0', borderRadius: 1 }}>
+                      <Typography variant="h6" sx={{ mb: 1, color: 'primary.main' }}>
                         {index + 1}. {selectedAttendance.date} - {selectedAttendance.class_type_display}
                       </Typography>
-                      <Typography variant="body2" sx={{ mt: 1 }}>
-                        내용: <strong>{selectedAttendance.content}</strong><br />
-                        지각: <strong>{selectedAttendance.is_late ? '예' : '아니오'}</strong><br />
-                        숙제 이행도: <strong>{selectedAttendance.homework_completion}%</strong><br />
-                        숙제 정답률: <strong>{selectedAttendance.homework_accuracy}%</strong>
+                      
+                      <Divider sx={{ my: 1 }} />
+
+                      <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'bold' }}>
+                        출석 기록
                       </Typography>
+                      <Box sx={{ pl: 1, mb: 2 }}>
+                        <Typography variant="body2">
+                          날짜: <strong>{selectedAttendance.date}</strong><br />
+                          수업 종류: <strong>{selectedAttendance.class_type_display}</strong><br />
+                          내용: <strong>{selectedAttendance.content || '내용 없음'}</strong><br />
+                          지각: <strong>{selectedAttendance.is_late ? '예' : '아니오'}</strong><br />
+                          숙제 이행도: <strong>{selectedAttendance.homework_completion}%</strong><br />
+                          숙제 정답률: <strong>{selectedAttendance.homework_accuracy}%</strong>
+                        </Typography>
+                      </Box>
 
                       {relatedExams.length > 0 && (
                         <>
                           <Divider sx={{ my: 1 }} />
-                          <Typography variant="subtitle2" sx={{ mt: 1 }}>
-                            관련된 시험 기록 ({relatedExams.length}개)
+                          <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'bold', color: 'primary.main' }}>
+                            테스트 상세 결과 ({relatedExams.length}개)
                           </Typography>
-                          <Box sx={{ mt: 1, pl: 1 }}>
+                          <Box sx={{ pl: 1 }}>
                             {relatedExams.map(exam => {
                               const examAverage = examAverages.find(avg => avg.name === exam.name);
                               return (
-                                <Box key={exam.id} sx={{ mb: 1 }}>
+                                <Box key={exam.id} sx={{ mb: 1, p: 1, backgroundColor: '#f9f9f9', borderRadius: 1, border: '1px solid #eee' }}>
                                   <Typography variant="body2">
-                                    <strong>{exam.name}</strong> ({exam.category_display}):{' '}
-                                    {exam.grade
-                                      ? `등급 ${exam.grade}`
+                                    <strong>- {exam.name}</strong>:{' '}
+                                    {exam.grade 
+                                      ? `${exam.grade} 등급` 
                                       : `${exam.score}/${exam.max_score}점`}
-                                    {examAverage && !exam.grade && ` (반 평균: ${Math.round(examAverage.average_score)}점)`}
+                                    {examAverage && !exam.grade && (
+                                      <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                                        (반 평균: {Math.round(examAverage.average_score * 10) / 10}점)
+                                      </Typography>
+                                    )}
                                   </Typography>
                                 </Box>
                               );
@@ -974,10 +988,23 @@ const StudentManagement: React.FC = () => {
                           </Box>
                         </>
                       )}
+
+                      {relatedExams.length === 0 && (
+                        <>
+                          <Divider sx={{ my: 1 }} />
+                          <Typography variant="body2" color="text.secondary">
+                            관련된 시험 기록이 없습니다.
+                          </Typography>
+                        </>
+                      )}
                     </Box>
                   );
                 })}
               </Box>
+
+              <Alert severity="warning" sx={{ mt: 2 }}>
+                위 내용이 학부모님께 전송됩니다. 신중하게 확인 후 전송해주세요.
+              </Alert>
             </>
           )}
         </DialogContent>
