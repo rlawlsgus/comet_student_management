@@ -18,6 +18,7 @@ import {
   DialogActions,
   Alert,
   CircularProgress,
+  Snackbar,
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
@@ -41,6 +42,15 @@ const ClassList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error' | 'info' | 'warning';
+  }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
   const mountedRef = useRef(false);
 
   useEffect(() => {
@@ -78,15 +88,13 @@ const ClassList: React.FC = () => {
       const response = await classAPI.deleteClass(selectedClass.id);
       setClasses(classes.filter(c => c.id !== selectedClass.id));
       
-      // 성공 메시지 표시
-      if (response.message) {
-        alert(response.message);
-      } else {
-        alert('반이 성공적으로 삭제되었습니다.');
-      }
+      setSnackbar({
+        open: true,
+        message: response.message || '반이 성공적으로 삭제되었습니다.',
+        severity: 'success'
+      });
     } catch (error: any) {
-      
-      // 백엔드에서 오는 에러 메시지 처리
+      // 에러 메시지 처리
       let errorMessage = '반 삭제에 실패했습니다.';
       
       if (error.message) {
@@ -99,11 +107,19 @@ const ClassList: React.FC = () => {
         }
       }
       
-      alert(errorMessage);
+      setSnackbar({
+        open: true,
+        message: errorMessage,
+        severity: 'error'
+      });
     } finally {
       setDeleteDialogOpen(false);
       setSelectedClass(null);
     }
+  };
+
+  const handleSnackbarClose = () => {
+    setSnackbar(prev => ({ ...prev, open: false }));
   };
 
   const getDayOfWeek = (day: string) => {
@@ -133,8 +149,11 @@ const ClassList: React.FC = () => {
 
   if (loading) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4 }}>
-        <Typography>로딩 중...</Typography>
+      <Container maxWidth="lg" sx={{ mt: 4, textAlign: 'center' }}>
+        <CircularProgress />
+        <Typography variant="body1" sx={{ mt: 2 }}>
+          로딩 중...
+        </Typography>
       </Container>
     );
   }
@@ -231,8 +250,19 @@ const ClassList: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert onClose={handleSnackbarClose} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };
 
-export default ClassList; 
+export default ClassList;

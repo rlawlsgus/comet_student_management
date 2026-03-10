@@ -18,6 +18,7 @@ import {
   DialogActions,
   Alert,
   CircularProgress,
+  Snackbar,
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
@@ -40,6 +41,15 @@ const UserList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error' | 'info' | 'warning';
+  }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
 
   useEffect(() => {
     fetchUsers();
@@ -72,14 +82,12 @@ const UserList: React.FC = () => {
       const response = await userAPI.deleteUser(selectedUser.id);
       setUsers(users.filter(user => user.id !== selectedUser.id));
       
-      // 성공 메시지 표시
-      if (response.message) {
-        alert(response.message);
-      } else {
-        alert('회원이 성공적으로 삭제되었습니다.');
-      }
+      setSnackbar({
+        open: true,
+        message: response.message || '회원이 성공적으로 삭제되었습니다.',
+        severity: 'success'
+      });
     } catch (error: any) {
-      
       // 에러 메시지 처리
       let errorMessage = '회원 삭제에 실패했습니다.';
       
@@ -93,11 +101,19 @@ const UserList: React.FC = () => {
         }
       }
       
-      alert(errorMessage);
+      setSnackbar({
+        open: true,
+        message: errorMessage,
+        severity: 'error'
+      });
     } finally {
       setDeleteDialogOpen(false);
       setSelectedUser(null);
     }
+  };
+
+  const handleSnackbarClose = () => {
+    setSnackbar(prev => ({ ...prev, open: false }));
   };
 
   const getRoleDisplay = (role: string) => {
@@ -118,7 +134,6 @@ const UserList: React.FC = () => {
     return subjects[subject as keyof typeof subjects] || subject;
   };
 
-  // 현재 사용자의 권한에 따라 버튼 표시 여부 결정
   const canEdit = currentUser?.role !== 'ASSISTANT';
 
   if (loading) {
@@ -221,8 +236,19 @@ const UserList: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert onClose={handleSnackbarClose} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };
 
-export default UserList; 
+export default UserList;
