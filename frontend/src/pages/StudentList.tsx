@@ -29,6 +29,7 @@ import {
   Slider,
   TextField,
   Chip,
+  CircularProgress,
 } from '@mui/material';
 import { 
   Edit as EditIcon, 
@@ -81,6 +82,8 @@ const StudentList: React.FC = () => {
   const [openAttendanceDialog, setOpenAttendanceDialog] = useState(false);
   const [openExamDialog, setOpenExamDialog] = useState(false);
   const [openSendDialog, setOpenSendDialog] = useState(false);
+  const [openResultDialog, setOpenResultDialog] = useState(false);
+  const [sendResult, setSendResult] = useState<{ total: number; success: number; failed: any[] }>({ total: 0, success: 0, failed: [] });
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [studentAttendances, setStudentAttendances] = useState<any[]>([]);
   const [error, setError] = useState<string>('');
@@ -127,7 +130,7 @@ const StudentList: React.FC = () => {
       setStudents(studentsResponse);
       setClasses(classesResponse);
     } catch (error) {
-      console.error('데이터 조회 실패:', error);
+
     } finally {
       setLoading(false);
     }
@@ -142,7 +145,6 @@ const StudentList: React.FC = () => {
   };
 
   const filteredStudents = students.filter(student => {
-    // Subject Filter
     if (filters.subject) {
       const studentClassSubjects = student.classes.map(classId => {
         const foundClass = classes.find(c => c.id === classId);
@@ -153,7 +155,6 @@ const StudentList: React.FC = () => {
       }
     }
   
-    // Class Filter
     if (filters.classId) {
       if (filters.classId === 'UNASSIGNED') {
         if (student.classes.length > 0) return false;
@@ -197,10 +198,14 @@ const StudentList: React.FC = () => {
     setDeleteTarget(null);
   };
 
-  // 출석 기록 개별 추가
   const handleAttendanceSubmit = async () => {
     if (!selectedStudent || !newAttendance.class_info) {
-        setSnackbar({ open: true, message: '학생과 반을 모두 선택해야 합니다.', severity: 'error' });
+        setError('학생과 반을 모두 선택해야 합니다.');
+        return;
+    }
+
+    if (!newAttendance.content) {
+        setError('수업 내용을 입력해주세요.');
         return;
     }
 
@@ -216,16 +221,19 @@ const StudentList: React.FC = () => {
       setOpenAttendanceDialog(false);
       setSnackbar({ open: true, message: `${selectedStudent.name} 학생에게 출석 기록이 추가되었습니다.`, severity: 'success' });
     } catch (error: any) {
-      console.error('Error submitting attendance:', error);
       setError(error.message || '출석 기록 추가 중 오류가 발생했습니다.');
     }
   };
 
-  // 시험 기록 개별 추가
   const handleExamSubmit = async () => {
     if (!selectedStudent) return;
 
     const { category, name, score, max_score, grade, attendance } = newExam;
+
+    if (!name) {
+      setError('시험 이름을 입력해주세요.');
+      return;
+    }
 
     if (!attendance) {
       setError('출석 기록을 선택해주세요.');
@@ -257,7 +265,6 @@ const StudentList: React.FC = () => {
       setOpenExamDialog(false);
       setSnackbar({ open: true, message: `${selectedStudent.name} 학생에게 시험 기록이 추가되었습니다.`, severity: 'success' });
       
-      // 폼 초기화
       setNewExam({
         name: '',
         category: 'REVIEW',
@@ -267,7 +274,6 @@ const StudentList: React.FC = () => {
         attendance: null,
       });
     } catch (error: any) {
-      console.error('Error submitting exam:', error);
       const errText = error.response?.data?.detail || error.message || '시험 기록 추가 중 오류가 발생했습니다.';
       setError(errText);
       setSnackbar({ open: true, message: errText, severity: 'error' });
@@ -281,7 +287,6 @@ const StudentList: React.FC = () => {
       const attendances = await studentAPI.getAttendanceRecords(student.id);
       setStudentAttendances(attendances);
       
-      // 폼 초기화 및 가장 최근 출석 기록을 기본값으로 설정
       setNewExam({
         name: '',
         category: 'REVIEW',
@@ -331,21 +336,70 @@ const StudentList: React.FC = () => {
   
   const handleSendKakaoNotification = async () => {
     try {
+      setLoading(true);
       const today = format(new Date(), 'yyyy-MM-dd');
       const studentIds = sendTargets.map(target => target.student.id);
 
       if (studentIds.length === 0) {
         setSnackbar({ open: true, message: '전송할 대상이 없습니다.', severity: 'warning' });
+        setLoading(false);
         return;
       }
 
       const response = await notificationAPI.sendBulkNotification(studentIds, today);
       
-      setSnackbar({ open: true, message: response.message || '알림톡이 성공적으로 전송되었습니다.', severity: 'success' });
+      const successCount = response.success || 0;
+      const failedCount = (response.failed_items || []).length;
+
+      if (failedCount > 0) {
+        setSendResult({
+          total: response.total || studentIds.length,
+          success: successCount,
+          failed: response.failed_items || [],
+        });
+        setOpenResultDialog(true);
+      } else {
+        setSnackbar({ 
+          open: true, 
+          message: `${successCount}명에게 알림톡을 성공적으로 전송했습니다.`, 
+          severity: 'success' 
+        });
+      }
+      
       setOpenSendDialog(false);
     } catch (error: any) {
       const errorMessage = error.message || '알림톡 전송 중 오류가 발생했습니다.';
       setSnackbar({ open: true, message: errorMessage, severity: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRetryFailed = async () => {
+    try {
+      setLoading(true);
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const studentIds = sendResult.failed.map(item => item.student.id);
+
+      if (studentIds.length === 0) return;
+
+      const response = await notificationAPI.sendBulkNotification(studentIds, today);
+      
+      const newSuccessCount = sendResult.success + (response.success || 0);
+      setSendResult({
+        total: sendResult.total,
+        success: newSuccessCount,
+        failed: response.failed_items || [],
+      });
+
+      if ((response.failed_items || []).length === 0) {
+        setSnackbar({ open: true, message: '모든 실패 건이 재전송되었습니다.', severity: 'success' });
+        setOpenResultDialog(false);
+      }
+    } catch (error: any) {
+      setSnackbar({ open: true, message: '재전송 중 오류가 발생했습니다.', severity: 'error' });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -355,7 +409,7 @@ const StudentList: React.FC = () => {
 
   const canEdit = user?.role !== 'ASSISTANT';
 
-  if (loading) {
+  if (loading && students.length === 0) {
     return <Container maxWidth="lg" sx={{ mt: 4 }}><Typography>로딩 중...</Typography></Container>;
   }
 
@@ -447,11 +501,7 @@ const StudentList: React.FC = () => {
         </Table>
       </TableContainer>
       
-      {/* Dialogs and Snackbar... */}
-       <Dialog
-        open={deleteDialogOpen}
-        onClose={handleDeleteCancel}
-      >
+       <Dialog open={deleteDialogOpen} onClose={handleDeleteCancel}>
         <DialogTitle>학생 삭제 확인</DialogTitle>
         <DialogContent>
           <DialogContentText>
@@ -467,6 +517,7 @@ const StudentList: React.FC = () => {
       <Dialog open={openAttendanceDialog} onClose={() => setOpenAttendanceDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>출석 기록 추가: {selectedStudent?.name}</DialogTitle>
         <DialogContent>
+            {error && <Alert severity="error" sx={{ mt: 2, mb: 1 }}>{error}</Alert>}
             <FormControl fullWidth sx={{ mt: 2, mb: 2 }}>
                 <InputLabel>수업 선택</InputLabel>
                 <Select
@@ -509,9 +560,8 @@ const StudentList: React.FC = () => {
             <Button onClick={() => setOpenAttendanceDialog(false)}>취소</Button>
             <Button onClick={handleAttendanceSubmit} variant="contained">추가</Button>
         </DialogActions>
-            </Dialog>
+      </Dialog>
       
-      {/* 시험 기록 개별 추가 다이얼로그 */}
       <Dialog open={openExamDialog} onClose={() => setOpenExamDialog(false)} sx={{ '& .MuiDialog-paper': { width: '500px' } }}>
         <DialogTitle>시험 기록 추가: {selectedStudent?.name}</DialogTitle>
         <DialogContent>
@@ -649,139 +699,130 @@ const StudentList: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenExamDialog(false)}>취소</Button>
-          <Button onClick={handleExamSubmit} variant="contained">
-            추가
-          </Button>
+          <Button onClick={handleExamSubmit} variant="contained">추가</Button>
         </DialogActions>
       </Dialog>
       
-            {/* 일괄 전송 확인 다이얼로그 */}
-            <Dialog 
-              open={openSendDialog} 
-              onClose={() => {
-                setOpenSendDialog(false);
-                setSendTargets([]);
-              }}
-              maxWidth="lg"
-              fullWidth
-            >
-              <DialogTitle>일괄 알림톡 전송 확인</DialogTitle>
-              <DialogContent>
-                <Alert severity="info" sx={{ mb: 2 }}>
-                  오늘 출석 기록이 있는 학생들의 정보를 학부모님께 전송합니다.
-                </Alert>
-                
-                <Typography variant="h6" sx={{ mb: 1 }}>
-                  전송 대상
+      <Dialog 
+        open={openSendDialog} 
+        onClose={() => {
+          if (!loading) {
+            setOpenSendDialog(false);
+            setSendTargets([]);
+          }
+        }}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>일괄 알림톡 전송 확인</DialogTitle>
+        <DialogContent>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            오늘 출석 기록이 있는 학생들의 정보를 학부모님께 전송합니다.
+          </Alert>
+          <Typography variant="h6" sx={{ mb: 1 }}>전송 대상</Typography>
+          <Typography sx={{ mb: 2 }}>
+            학생 수: <strong>{sendTargets.length}명</strong><br />
+            전송 조건: 오늘({format(new Date(), 'yyyy-MM-dd')}) 출석 기록이 있는 학생
+          </Typography>
+          <Divider sx={{ my: 2 }} />
+          <Typography variant="h6" sx={{ mb: 2 }}>전송할 내용 미리보기</Typography>
+          <Box sx={{ maxHeight: 400, overflow: 'auto', mb: 2 }}>
+            {sendTargets.map((target, index) => (
+              <Box key={index} sx={{ mb: 3, p: 2, border: '1px solid #e0e0e0', borderRadius: 1 }}>
+                <Typography variant="h6" sx={{ mb: 1, color: 'primary.main' }}>{target.student.name} 학생</Typography>
+                <Typography variant="body2" sx={{ mb: 1 }}><strong>학부모 연락처:</strong> {target.student.parent_phone}</Typography>
+                <Divider sx={{ my: 1 }} />
+                <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'bold' }}>출석 기록</Typography>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  날짜: <strong>{target.attendance.date}</strong><br />
+                  수업 종류: <strong>{target.attendance.class_type_display}</strong><br />
+                  내용: <strong>{target.attendance.content}</strong><br />
+                  지각: <strong>{target.attendance.is_late ? '예' : '아니오'}</strong><br />
+                  숙제 이행도: <strong>{target.attendance.homework_completion}%</strong><br />
+                  숙제 정답률: <strong>{target.attendance.homework_accuracy}%</strong>
                 </Typography>
-                <Typography sx={{ mb: 2 }}>
-                  학생 수: <strong>{sendTargets.length}명</strong><br />
-                  전송 조건: 오늘({format(new Date(), 'yyyy-MM-dd')}) 출석 기록이 있는 학생
-                </Typography>
-      
-                <Divider sx={{ my: 2 }} />
-      
-                {/* 전송할 내용 미리보기 */}
-                <Typography variant="h6" sx={{ mb: 2 }}>
-                  전송할 내용 미리보기
-                </Typography>
-                
-                <Box sx={{ maxHeight: 400, overflow: 'auto', mb: 2 }}>
-                  {sendTargets.map((target, index) => (
-                    <Box key={index} sx={{ mb: 3, p: 2, border: '1px solid #e0e0e0', borderRadius: 1 }}>
-                      <Typography variant="h6" sx={{ mb: 1, color: 'primary.main' }}>
-                        {target.student.name} 학생
-                      </Typography>
-                      
-                      <Typography variant="body2" sx={{ mb: 1 }}>
-                        <strong>학부모 연락처:</strong> {target.student.parent_phone}
-                      </Typography>
-      
-                      <Divider sx={{ my: 1 }} />
-      
-                      {/* 출석 기록 */}
-                      <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'bold' }}>
-                        출석 기록
-                      </Typography>
-                      <Typography variant="body2" sx={{ mb: 1 }}>
-                        날짜: <strong>{target.attendance.date}</strong><br />
-                        수업 종류: <strong>{target.attendance.class_type_display}</strong><br />
-                        내용: <strong>{target.attendance.content}</strong><br />
-                        지각: <strong>{target.attendance.is_late ? '예' : '아니오'}</strong><br />
-                        숙제 이행도: <strong>{target.attendance.homework_completion}%</strong><br />
-                        숙제 정답률: <strong>{target.attendance.homework_accuracy}%</strong>
-                      </Typography>
-      
-                      {/* 관련된 시험 기록들 */}
-                      {target.exams.length > 0 && (
-                        <>
-                          <Divider sx={{ my: 1 }} />
-                          <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'bold', color: 'primary.main' }}>
-                            테스트 상세 결과 ({target.exams.length}개)
-                          </Typography>
-                          {target.exams.map((exam: any, examIndex: number) => (
-                            <Box key={examIndex} sx={{ mb: 1, p: 1, backgroundColor: '#f9f9f9', borderRadius: 1, border: '1px solid #eee' }}>
-                              <Typography variant="body2">
-                                <strong>- {exam.name}</strong>:{' '}
-                                {exam.grade 
-                                  ? `${exam.grade} 등급` 
-                                  : `${exam.score}/${exam.max_score}점`}
-                                {exam.class_average && !exam.grade && (
-                                  <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                                    (반 평균: {Math.round(exam.class_average * 10) / 10}점 / 최고: {exam.class_max_score}점)
-                                  </Typography>
-                                )}
-                              </Typography>
-                            </Box>
-                          ))}
-                        </>
-                      )}
-      
-                      {target.exams.length === 0 && (
-                        <>
-                          <Divider sx={{ my: 1 }} />
-                          <Typography variant="body2" color="text.secondary">
-                            관련된 시험 기록이 없습니다.
-                          </Typography>
-                        </>
-                      )}
-                    </Box>
-                  ))}
-                </Box>
-      
-                <Alert severity="warning" sx={{ mb: 2 }}>
-                  위 내용이 각 학생의 학부모님께 전송됩니다. 신중하게 확인 후 전송해주세요.
-                </Alert>
-              </DialogContent>
-              <DialogActions>
-                <Button 
-                  onClick={() => {
-                    setOpenSendDialog(false);
-                    setSendTargets([]);
-                  }} 
-                  variant="outlined"
-                >
-                  취소
-                </Button>
-                <Button onClick={handleSendKakaoNotification} color="primary" variant="contained">
-                  전송
-                </Button>
-              </DialogActions>
-            </Dialog>
-            
-            {/* 스낵바 */}
-            <Snackbar
-              open={snackbar.open}
-              autoHideDuration={6000}
-              onClose={handleSnackbarClose}
-              anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-            >
-              <Alert onClose={handleSnackbarClose} severity={snackbar.severity} sx={{ width: '100%' }}>
-                {snackbar.message}
-              </Alert>
-            </Snackbar>
-          </Container>
-        );
-      };
+                {target.exams.length > 0 ? (
+                  <>
+                    <Divider sx={{ my: 1 }} />
+                    <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'bold', color: 'primary.main' }}>테스트 상세 결과 ({target.exams.length}개)</Typography>
+                    {target.exams.map((exam: any, examIndex: number) => (
+                      <Box key={examIndex} sx={{ mb: 1, p: 1, backgroundColor: '#f9f9f9', borderRadius: 1, border: '1px solid #eee' }}>
+                        <Typography variant="body2">
+                          <strong>- {exam.name}</strong>:{' '}
+                          {exam.grade ? `${exam.grade} 등급` : `${exam.score}/${exam.max_score}점`}
+                          {exam.class_average && !exam.grade && (
+                            <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                              (반 평균: {Math.round(exam.class_average * 10) / 10}점 / 최고: {exam.class_max_score}점)
+                            </Typography>
+                          )}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    <Divider sx={{ my: 1 }} />
+                    <Typography variant="body2" color="text.secondary">관련된 시험 기록이 없습니다.</Typography>
+                  </>
+                )}
+              </Box>
+            ))}
+          </Box>
+          <Alert severity="warning" sx={{ mb: 2 }}>위 내용이 각 학생의 학부모님께 전송됩니다. 신중하게 확인 후 전송해주세요.</Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setOpenSendDialog(false); setSendTargets([]); }} variant="outlined" disabled={loading}>취소</Button>
+          <Button onClick={handleSendKakaoNotification} color="primary" variant="contained" disabled={loading}>
+            {loading ? <CircularProgress size={24} /> : '전송'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
-export default StudentList; 
+      <Dialog open={openResultDialog} onClose={() => !loading && setOpenResultDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>알림톡 전송 결과</DialogTitle>
+        <DialogContent>
+          <Box sx={{ textAlign: 'center', my: 2 }}>
+            <Typography variant="h4" color={sendResult.failed.length > 0 ? "warning.main" : "success.main"}>
+              {sendResult.success} / {sendResult.total} 성공
+            </Typography>
+            {sendResult.failed.length > 0 && (
+              <Typography variant="body1" color="error" sx={{ mt: 1 }}>
+                {sendResult.failed.length}건의 전송 실패가 발생했습니다.
+              </Typography>
+            )}
+          </Box>
+          {sendResult.failed.length > 0 && (
+            <>
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="h6" gutterBottom>실패 목록</Typography>
+              <Box sx={{ maxHeight: 200, overflow: 'auto' }}>
+                {sendResult.failed.map((item, idx) => (
+                  <Box key={idx} sx={{ p: 1, borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography>{item.student.name}</Typography>
+                    <Typography variant="body2" color="text.secondary">{item.student.parent_phone}</Typography>
+                  </Box>
+                ))}
+              </Box>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenResultDialog(false)} disabled={loading}>닫기</Button>
+          {sendResult.failed.length > 0 && (
+            <Button onClick={handleRetryFailed} color="primary" variant="contained" disabled={loading} startIcon={loading ? <CircularProgress size={20} /> : <SendIcon />}>
+              {loading ? '재전송 중...' : '실패 건 재전송'}
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
+      
+      <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={handleSnackbarClose} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
+        <Alert onClose={handleSnackbarClose} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </Container>
+  );
+};
+
+export default StudentList;

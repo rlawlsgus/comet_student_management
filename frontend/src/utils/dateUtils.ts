@@ -14,7 +14,6 @@ export const formatTime = (timeString: string): string => {
     });
   } catch (error) {
     // 파싱 실패 시 원본 문자열 반환
-    console.warn("시간 파싱 실패:", timeString, error);
     return timeString;
   }
 };
@@ -29,7 +28,6 @@ export const formatDate = (date: Date | string): string => {
     const dateObj = typeof date === "string" ? new Date(date) : date;
     return dateObj.toISOString().split("T")[0];
   } catch (error) {
-    console.warn("날짜 파싱 실패:", date, error);
     return String(date);
   }
 };
@@ -48,7 +46,6 @@ export const formatDateKorean = (date: Date | string): string => {
       day: "numeric",
     });
   } catch (error) {
-    console.warn("날짜 파싱 실패:", date, error);
     return String(date);
   }
 };

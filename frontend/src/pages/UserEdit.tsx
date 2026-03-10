@@ -60,7 +60,6 @@ const UserEdit: React.FC = () => {
       });
     } catch (err) {
       setError('사용자 정보를 불러오는 중 오류가 발생했습니다.');
-      console.error('Error loading user data:', err);
     } finally {
       setInitialLoading(false);
     }

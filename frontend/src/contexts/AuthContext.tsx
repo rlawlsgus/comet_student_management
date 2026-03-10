@@ -67,7 +67,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       await authAPI.logout();
     } catch (error) {
-      console.error('Logout error:', error);
+
     } finally {
       setUser(null);
     }

@@ -166,26 +166,33 @@ class AlimtalkService:
         for idx, item in enumerate(bulk_data):
             p = self._build_payload(item)
             if p:
-                valid_items.append({"idx": idx, "payload": p})
+                valid_items.append({"idx": idx, "payload": p, "data": item})
 
         success_count = 0
-        failed_indices = []
+        failed_items = []
+        temp_failed_indices = []
 
         # 1차 전송 (100건 단위)
         for i in range(0, len(valid_items), 100):
             chunk = valid_items[i : i + 100]
-            success_count += self._post_chunk(chunk, failed_indices)
+            success_count += self._post_chunk(chunk, temp_failed_indices)
 
         # 실패 건 재시도
-        if failed_indices:
+        if temp_failed_indices:
             retry_items = [
-                {"idx": -1, "payload": self._build_payload(bulk_data[idx])}
-                for idx in failed_indices
+                {"idx": idx, "payload": self._build_payload(bulk_data[idx]), "data": bulk_data[idx]}
+                for idx in temp_failed_indices
             ]
+            
+            final_failed_indices = []
             for i in range(0, len(retry_items), 100):
-                success_count += self._post_chunk(retry_items[i : i + 100], [])
+                success_count += self._post_chunk(retry_items[i : i + 100], final_failed_indices)
+            
+            # 최종 실패 항목 정리
+            for idx in final_failed_indices:
+                failed_items.append(bulk_data[idx])
 
-        return success_count
+        return success_count, failed_items
 
     def _post_chunk(self, chunk, failed_log):
         payload_chunk = [c["payload"] for c in chunk]
@@ -198,12 +205,11 @@ class AlimtalkService:
             for r, c in zip(res.json(), chunk):
                 if r.get("code") == "success":
                     chunk_success += 1
-                elif c["idx"] != -1:
+                else:
                     failed_log.append(c["idx"])
             return chunk_success
         except:
-            if chunk and chunk[0]["idx"] != -1:
-                failed_log.extend([c["idx"] for c in chunk])
+            failed_log.extend([c["idx"] for c in chunk])
             return 0
 
     def _build_payload(self, data):
@@ -291,14 +297,14 @@ class KakaoNotificationView(APIView):
                 return self._handle_single(request)
             if mode == "bulk":
                 return self._handle_bulk(request)
-            return Response({"detail": "Invalid type"}, status=400)
+            return Response({"detail": "유효하지 않은 유형입니다."}, status=400)
         except Exception as e:
             return Response({"detail": str(e)}, status=500)
 
     def _handle_single(self, request):
         s_id, a_id = request.data.get("student_id"), request.data.get("attendance_id")
         if not s_id or not a_id:
-            return Response({"detail": "Missing IDs"}, status=400)
+            return Response({"detail": "필수 ID가 누락되었습니다."}, status=400)
 
         student = Student.objects.get(id=s_id)
         attendance = Attendance.objects.get(id=a_id, student=student)
@@ -309,7 +315,7 @@ class KakaoNotificationView(APIView):
                 not attendance.class_info
                 or attendance.class_info.subject != request.user.subject
             ):
-                return Response({"detail": "No permission"}, status=403)
+                return Response({"detail": "권한이 없습니다."}, status=403)
 
         data = self._prepare_notification_data(student, attendance)
         if self.alimtalk.send(data):
@@ -320,7 +326,7 @@ class KakaoNotificationView(APIView):
         student_ids = request.data.get("student_ids", [])
         target_date = request.data.get("target_date")
         if not student_ids or not target_date:
-            return Response({"detail": "Missing data"}, status=400)
+            return Response({"detail": "데이터가 누락되었습니다."}, status=400)
 
         students = Student.objects.filter(id__in=student_ids)
         if request.user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
@@ -333,16 +339,17 @@ class KakaoNotificationView(APIView):
                 bulk_data.append(self._prepare_notification_data(st, att))
 
         if not bulk_data:
-            return Response({"detail": "No attendance records"}, status=400)
+            return Response({"detail": "출석 기록이 없습니다."}, status=400)
         if request.data.get("preview"):
             return Response(bulk_data)
 
-        success_count = self.alimtalk.send_bulk(bulk_data)
+        success_count, failed_items = self.alimtalk.send_bulk(bulk_data)
         return Response(
             {
                 "message": f"{success_count}명 전송 성공",
                 "total": len(bulk_data),
                 "success": success_count,
+                "failed_items": failed_items,
             }
         )
 

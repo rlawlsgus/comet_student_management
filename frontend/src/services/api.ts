@@ -54,10 +54,10 @@ const apiCall = async (endpoint: string, options: RequestInit = {}) => {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error("API Error Response:", errorData); // 디버깅용 로그 추가
+
 
         // Django REST Framework의 오류 응답 처리
-        let errorMessage = `HTTP error! status: ${response.status}`;
+        let errorMessage = `서버 오류가 발생했습니다. (상태 코드: ${response.status})`;
 
         if (errorData.detail) {
           // detail 필드가 있는 경우 (우선순위 1)
@@ -109,7 +109,6 @@ const apiCall = async (endpoint: string, options: RequestInit = {}) => {
         return {};
       }
     } catch (error) {
-      console.error("API call failed:", error);
       throw error;
     } finally {
       // 요청 완료 후 캐시에서 제거

@@ -152,7 +152,6 @@ const Profile: React.FC = () => {
           await logout();
           navigate('/login');
         } catch (err) {
-          console.error('로그아웃 중 오류:', err);
           navigate('/login');
         }
       }, 2000);

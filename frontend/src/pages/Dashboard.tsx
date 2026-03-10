@@ -40,7 +40,6 @@ const Dashboard: React.FC = () => {
         setStudents([]);
       }
     } catch (err: any) {
-      console.error('대시보드 데이터 로드 실패:', err);
       setError(err.message || '데이터를 불러오는 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
@@ -76,7 +75,6 @@ const Dashboard: React.FC = () => {
       const studentDetail = await studentAPI.getStudent(student.id);
       setSelectedStudent(studentDetail);
     } catch (err: any) {
-      console.error('학생 상세 정보 로드 실패:', err);
       // 상세 정보 로드에 실패해도 기본 정보로 표시
       setSelectedStudent(student);
     }

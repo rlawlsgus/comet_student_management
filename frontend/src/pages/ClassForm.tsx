@@ -57,7 +57,6 @@ const ClassForm: React.FC = () => {
       });
     } catch (err) {
       setError('반 정보를 불러오는 중 오류가 발생했습니다.');
-      console.error('Error loading class data:', err);
     } finally {
       setInitialLoading(false);
     }
@@ -68,6 +67,28 @@ const ClassForm: React.FC = () => {
     setFormData(prev => ({
       ...prev,
       [name as string]: value,
+    }));
+  };
+
+  // 30분 단위 시간 목록 생성 (08:00 ~ 23:00)
+  const generateTimeOptions = () => {
+    const options = [];
+    for (let hour = 8; hour <= 23; hour++) {
+      for (let min of ['00', '30']) {
+        const time = `${hour.toString().padStart(2, '0')}:${min}:00`;
+        const label = `${hour.toString().padStart(2, '0')}:${min}`;
+        options.push({ value: time, label });
+      }
+    }
+    return options;
+  };
+
+  const timeOptions = generateTimeOptions();
+
+  const handleTimeChange = (e: any) => {
+    setFormData(prev => ({
+      ...prev,
+      startTime: e.target.value,
     }));
   };
 
@@ -83,7 +104,8 @@ const ClassForm: React.FC = () => {
     }
 
     try {
-      // 프론트엔드 데이터를 백엔드 형식으로 변환
+      // 백엔드로 보낼 때 시간 형식이 "HH:mm:ss" 또는 "HH:mm" 인지 확인 필요
+      // 현재 Select에서 "HH:mm:00" 형식을 사용함
       const classData = {
         name: formData.name,
         subject: formData.subject,
@@ -99,11 +121,10 @@ const ClassForm: React.FC = () => {
       
       navigate('/classes');
     } catch (err: any) {
-      // 백엔드에서 오는 에러 메시지 처리
+      // ... 에러 처리 로직 동일
       let errorMessage = '반 저장 중 오류가 발생했습니다.';
       
       if (err.message) {
-        // 백엔드에서 오는 상세 에러 메시지가 있으면 사용
         if (typeof err.message === 'string') {
           errorMessage = err.message;
         } else if (err.message.detail) {
@@ -189,20 +210,22 @@ const ClassForm: React.FC = () => {
             </Select>
           </FormControl>
 
-          <TextField
-            fullWidth
-            label="시작 시간"
-            name="startTime"
-            type="time"
-            value={formData.startTime}
-            onChange={handleChange}
-            margin="normal"
-            required
-            disabled={loading}
-            InputLabelProps={{
-              shrink: true,
-            }}
-          />
+          <FormControl fullWidth margin="normal" required>
+            <InputLabel>시작 시간</InputLabel>
+            <Select
+              name="startTime"
+              value={formData.startTime}
+              onChange={handleTimeChange}
+              label="시작 시간"
+              disabled={loading}
+            >
+              {timeOptions.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
 
           <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
             <Button

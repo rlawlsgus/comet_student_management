@@ -64,7 +64,6 @@ const StudentForm: React.FC = () => {
       const response = await classAPI.getClasses();
       setAllClasses(response);
     } catch (err) {
-      console.error('반 목록 조회 실패:', err);
       setError('반 목록을 불러오는 중 오류가 발생했습니다.');
     }
   };
@@ -90,15 +89,27 @@ const StudentForm: React.FC = () => {
       });
     } catch (err) {
       setError('학생 정보를 불러오는 중 오류가 발생했습니다.');
-      console.error('Error loading student data:', err);
     }
+  };
+
+  const formatPhoneNumber = (value: string) => {
+    const digits = value.replace(/\D/g, '');
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+    return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7, 11)}`;
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | { name?: string; value: unknown }> | any) => {
     const { name, value } = e.target;
+    
+    let processedValue = value;
+    if (name === 'parentPhone' || name === 'studentPhone') {
+      processedValue = formatPhoneNumber(value as string);
+    }
+
     setFormData(prev => ({
       ...prev,
-      [name as string]: value,
+      [name as string]: processedValue,
     }));
   };
 

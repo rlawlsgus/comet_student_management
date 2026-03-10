@@ -145,7 +145,7 @@ const StudentManagement: React.FC = () => {
       setExams(examData);
       setExamAverages(averageData);
     } catch (error) {
-      console.error('Error fetching student data:', error);
+
       setError('학생 정보를 불러오는 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
@@ -193,7 +193,6 @@ const StudentManagement: React.FC = () => {
         class_info: null,
       });
     } catch (error: any) {
-      console.error('Error submitting attendance:', error);
       setError(error.message || '출석 기록 추가 중 오류가 발생했습니다.');
     }
   };
@@ -243,7 +242,6 @@ const StudentManagement: React.FC = () => {
         attendance: null,
       });
     } catch (error: any) {
-      console.error('Error submitting exam:', error);
       setError(error.message || '시험 기록 추가 중 오류가 발생했습니다.');
     }
   };
@@ -302,7 +300,6 @@ const StudentManagement: React.FC = () => {
       setOpenDeleteAttendanceDialog(false);
       fetchStudentData(student.id);
     } catch (error: any) {
-      console.error('Error deleting attendances:', error);
       setError(error.message || '출석 기록 삭제 중 오류가 발생했습니다.');
     }
   };
@@ -321,7 +318,6 @@ const StudentManagement: React.FC = () => {
       setOpenDeleteExamDialog(false);
       fetchStudentData(student.id);
     } catch (error: any) {
-      console.error('Error deleting exams:', error);
       setError(error.message || '시험 기록 삭제 중 오류가 발생했습니다.');
     }
   };
@@ -380,7 +376,6 @@ const StudentManagement: React.FC = () => {
       fetchStudentData(student.id);
   
     } catch (error: any) {
-      console.error('Error sending kakao notification:', error);
       setSnackbar({
         open: true,
         message: error.message || '알림톡 전송 중 오류가 발생했습니다.',
@@ -434,12 +429,6 @@ const StudentManagement: React.FC = () => {
           </Button>
         </Box>
       </Box>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
 
       <Paper sx={{ p: 2, mb: 3 }}>
         <FormControl>
@@ -608,6 +597,7 @@ const StudentManagement: React.FC = () => {
       <Dialog open={openAttendanceDialog} onClose={() => setOpenAttendanceDialog(false)}>
         <DialogTitle>출석 기록 추가</DialogTitle>
         <DialogContent>
+          {error && <Alert severity="error" sx={{ mt: 2, mb: 1 }}>{error}</Alert>}
           <FormControl fullWidth sx={{ mt: 2, mb: 2 }}>
             <InputLabel>수업 선택</InputLabel>
             <Select
@@ -709,6 +699,7 @@ const StudentManagement: React.FC = () => {
       <Dialog open={openExamDialog} onClose={() => setOpenExamDialog(false)} sx={{ '& .MuiDialog-paper': { width: '500px' } }}>
         <DialogTitle>시험 기록 추가</DialogTitle>
         <DialogContent>
+          {error && <Alert severity="error" sx={{ mt: 2, mb: 1 }}>{error}</Alert>}
           <FormControl fullWidth sx={{ mt: 2, mb: 2 }}>
             <InputLabel id="exam-category-label">시험 종류</InputLabel>
             <Select

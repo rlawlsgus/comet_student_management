@@ -25,7 +25,6 @@ const Login: React.FC = () => {
       // 로그인 성공 후 항상 대시보드로 이동
       navigate('/', { replace: true });
     } catch (error: any) {
-      console.error('Login failed:', error);
       setError(error.message || '로그인에 실패했습니다.');
     } finally {
       setLoading(false);

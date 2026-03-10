@@ -79,8 +79,7 @@ const Register: React.FC = () => {
       const response = await userAPI.createUser(backendData);
       navigate('/users'); // 회원 목록 페이지로 이동
     } catch (err: any) {
-      console.error('회원가입 실패:', err);
-      console.error('Error details:', err.message); // 디버깅용 로그
+
       
       // 백엔드에서 오는 에러 메시지 처리
       let errorMessage = '회원가입 중 오류가 발생했습니다.';
@@ -124,7 +123,7 @@ const Register: React.FC = () => {
             margin="normal"
             required
             disabled={loading}
-            helperText="3자 이상 30자 이하로 입력해주세요"
+            helperText="2자 이상 30자 이하로 입력해주세요"
           />
           
           <TextField

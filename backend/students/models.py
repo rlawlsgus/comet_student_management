@@ -72,6 +72,11 @@ class Student(models.Model):
     class Meta:
         verbose_name = "학생"
         verbose_name_plural = "학생"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["name", "parent_phone"], name="unique_student_parent_phone"
+            )
+        ]
 
     def __str__(self):
         return self.name

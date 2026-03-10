@@ -23,8 +23,8 @@ class UserCreateSerializer(serializers.ModelSerializer):
         if not value or not value.strip():
             raise serializers.ValidationError("아이디는 필수 입력 항목입니다.")
 
-        if len(value.strip()) < 3:
-            raise serializers.ValidationError("아이디는 최소 3자 이상이어야 합니다.")
+        if len(value.strip()) < 2:
+            raise serializers.ValidationError("아이디는 최소 2자 이상이어야 합니다.")
 
         if len(value.strip()) > 30:
             raise serializers.ValidationError("아이디는 최대 30자까지 입력 가능합니다.")
@@ -326,32 +326,52 @@ class StudentSerializer(serializers.ModelSerializer):
         if not value or not value.strip():
             raise serializers.ValidationError("부모님 전화번호는 필수 입력 항목입니다.")
 
-        # 전화번호 형식 검증 (010-0000-0000)
-        import re
-
-        phone_pattern = re.compile(r"^010-\d{4}-\d{4}$")
-        if not phone_pattern.match(value.strip()):
+        # 숫자만 추출
+        digits = "".join(filter(str.isdigit, value))
+        
+        if not digits.startswith("010") or len(digits) != 11:
             raise serializers.ValidationError(
-                "올바른 전화번호 형식으로 입력해주세요. (예: 010-0000-0000)"
+                "올바른 휴대전화 번호 형식이 아닙니다. (예: 010-0000-0000)"
             )
 
-        return value.strip()
+        # 표준 형식으로 변환하여 저장
+        return f"{digits[:3]}-{digits[3:7]}-{digits[7:]}"
 
     def validate_student_phone(self, value):
         """학생 전화번호 검증 (선택사항)"""
-        if not value:
-            return value
+        if not value or not value.strip():
+            return ""
 
-        # 전화번호 형식 검증 (010-0000-0000)
-        import re
-
-        phone_pattern = re.compile(r"^010-\d{4}-\d{4}$")
-        if not phone_pattern.match(value.strip()):
+        # 숫자만 추출
+        digits = "".join(filter(str.isdigit, value))
+        
+        if not digits.startswith("010") or len(digits) != 11:
             raise serializers.ValidationError(
-                "올른 전화번호 형식으로 입력해주세요. (예: 010-0000-0000)"
+                "올바른 휴대전화 번호 형식이 아닙니다. (예: 010-0000-0000)"
             )
 
-        return value.strip()
+        # 표준 형식으로 변환하여 저장
+        return f"{digits[:3]}-{digits[3:7]}-{digits[7:]}"
+
+    def validate(self, attrs):
+        """전체 데이터 검증 (중복 등록 방지)"""
+        name = attrs.get("name")
+        parent_phone = attrs.get("parent_phone")
+
+        if name and parent_phone:
+            # 수정 시에는 자기 자신을 제외하고 중복 확인
+            instance = getattr(self, "instance", None)
+            queryset = Student.objects.filter(name=name, parent_phone=parent_phone)
+
+            if instance:
+                queryset = queryset.exclude(id=instance.id)
+
+            if queryset.exists():
+                raise serializers.ValidationError(
+                    "이미 동일한 이름과 학부모 전화번호로 등록된 학생이 존재합니다."
+                )
+
+        return attrs
 
 
 class AttendanceSerializer(serializers.ModelSerializer):

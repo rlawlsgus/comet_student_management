@@ -140,7 +140,7 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, selectedClassId 
         });
         setExamAverages(averagesByClass);
       } catch (error) {
-        console.error('시험 평균 점수 로드 실패:', error);
+        
       } finally {
         setLoadingAverages(false);
       }

@@ -56,7 +56,7 @@ const ClassList: React.FC = () => {
       const response = await classAPI.getClasses();
       setClasses(response);
     } catch (error) {
-      console.error('반 목록 조회 실패:', error);
+      
     } finally {
       setLoading(false);
     }
@@ -85,7 +85,6 @@ const ClassList: React.FC = () => {
         alert('반이 성공적으로 삭제되었습니다.');
       }
     } catch (error: any) {
-      console.error('반 삭제 실패:', error);
       
       // 백엔드에서 오는 에러 메시지 처리
       let errorMessage = '반 삭제에 실패했습니다.';
