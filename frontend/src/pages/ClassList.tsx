@@ -29,9 +29,9 @@ import { formatTime } from '../utils/dateUtils';
 interface Class {
   id: number;
   name: string;
-  subject: 'CHEMISTRY' | 'BIOLOGY' | 'GEOSCIENCE';
-  day_of_week: 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY';
-  start_time: string;
+  subject?: 'CHEMISTRY' | 'BIOLOGY' | 'GEOSCIENCE' | null;
+  day_of_week?: 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY' | null;
+  start_time?: string | null;
   student_count: number;
 }
 
@@ -122,7 +122,8 @@ const ClassList: React.FC = () => {
     setSnackbar(prev => ({ ...prev, open: false }));
   };
 
-  const getDayOfWeek = (day: string) => {
+  const getDayOfWeek = (day: string | null | undefined) => {
+    if (!day) return '-';
     const days = {
       'MONDAY': '월요일',
       'TUESDAY': '화요일',
@@ -135,7 +136,8 @@ const ClassList: React.FC = () => {
     return days[day as keyof typeof days] || day;
   };
 
-  const getSubjectName = (subject: string) => {
+  const getSubjectName = (subject: string | null | undefined) => {
+    if (!subject) return '-';
     const subjects = {
       'CHEMISTRY': '화학',
       'BIOLOGY': '생명',

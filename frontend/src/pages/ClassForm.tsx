@@ -18,9 +18,9 @@ import { classAPI } from '../services/api';
 
 interface ClassFormData {
   name: string;
-  subject: 'CHEMISTRY' | 'BIOLOGY' | 'GEOSCIENCE';
-  dayOfWeek: 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY';
-  startTime: string;
+  subject?: 'CHEMISTRY' | 'BIOLOGY' | 'GEOSCIENCE' | null;
+  dayOfWeek?: 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY' | null;
+  startTime?: string | null;
 }
 
 const ClassForm: React.FC = () => {
@@ -36,6 +36,7 @@ const ClassForm: React.FC = () => {
   const [error, setError] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [initialLoading, setInitialLoading] = useState<boolean>(isEdit);
+  const [isWithdrawnClass, setIsWithdrawnClass] = useState<boolean>(false);
 
   useEffect(() => {
     if (isEdit && id) {
@@ -48,12 +49,15 @@ const ClassForm: React.FC = () => {
       setInitialLoading(true);
       const classData = await classAPI.getClass(classId);
       
+      const isWithdrawn = classData.name === '퇴원';
+      setIsWithdrawnClass(isWithdrawn);
+
       // 백엔드에서 받은 데이터를 프론트엔드 형식으로 변환
       setFormData({
         name: classData.name,
-        subject: classData.subject,
-        dayOfWeek: classData.day_of_week,
-        startTime: classData.start_time,
+        subject: classData.subject || 'CHEMISTRY',
+        dayOfWeek: classData.day_of_week || 'MONDAY',
+        startTime: classData.start_time || '',
       });
     } catch (err) {
       setError('반 정보를 불러오는 중 오류가 발생했습니다.');
@@ -64,6 +68,11 @@ const ClassForm: React.FC = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | { name?: string; value: unknown }> | any) => {
     const { name, value } = e.target;
+    
+    if (name === 'name') {
+      setIsWithdrawnClass(value === '퇴원');
+    }
+
     setFormData(prev => ({
       ...prev,
       [name as string]: value,
@@ -97,8 +106,14 @@ const ClassForm: React.FC = () => {
     setError('');
     setLoading(true);
 
-    if (!formData.name || !formData.startTime) {
-      setError('반 이름과 시작 시간은 필수 입력 항목입니다.');
+    if (!formData.name) {
+      setError('반 이름은 필수 입력 항목입니다.');
+      setLoading(false);
+      return;
+    }
+
+    if (!isWithdrawnClass && !formData.startTime) {
+      setError('시작 시간은 필수 입력 항목입니다.');
       setLoading(false);
       return;
     }
@@ -108,9 +123,9 @@ const ClassForm: React.FC = () => {
       // 현재 Select에서 "HH:mm:00" 형식을 사용함
       const classData = {
         name: formData.name,
-        subject: formData.subject,
-        day_of_week: formData.dayOfWeek,
-        start_time: formData.startTime,
+        subject: isWithdrawnClass ? null : formData.subject,
+        day_of_week: isWithdrawnClass ? null : formData.dayOfWeek,
+        start_time: isWithdrawnClass ? null : formData.startTime,
       };
 
       if (isEdit && id) {
@@ -173,59 +188,69 @@ const ClassForm: React.FC = () => {
             onChange={handleChange}
             margin="normal"
             required
-            disabled={loading}
+            disabled={loading || (isEdit && isWithdrawnClass)}
           />
           
-          <FormControl fullWidth margin="normal">
-            <InputLabel>과목</InputLabel>
-            <Select
-              name="subject"
-              value={formData.subject}
-              onChange={handleChange}
-              label="과목"
-              disabled={loading}
-            >
-              <MenuItem value="CHEMISTRY">화학</MenuItem>
-              <MenuItem value="BIOLOGY">생명</MenuItem>
-              <MenuItem value="GEOSCIENCE">지학</MenuItem>
-            </Select>
-          </FormControl>
+          {!isWithdrawnClass && (
+            <>
+              <FormControl fullWidth margin="normal">
+                <InputLabel>과목</InputLabel>
+                <Select
+                  name="subject"
+                  value={formData.subject}
+                  onChange={handleChange}
+                  label="과목"
+                  disabled={loading}
+                >
+                  <MenuItem value="CHEMISTRY">화학</MenuItem>
+                  <MenuItem value="BIOLOGY">생명</MenuItem>
+                  <MenuItem value="GEOSCIENCE">지학</MenuItem>
+                </Select>
+              </FormControl>
 
-          <FormControl fullWidth margin="normal">
-            <InputLabel>요일</InputLabel>
-            <Select
-              name="dayOfWeek"
-              value={formData.dayOfWeek}
-              onChange={handleChange}
-              label="요일"
-              disabled={loading}
-            >
-              <MenuItem value="MONDAY">월요일</MenuItem>
-              <MenuItem value="TUESDAY">화요일</MenuItem>
-              <MenuItem value="WEDNESDAY">수요일</MenuItem>
-              <MenuItem value="THURSDAY">목요일</MenuItem>
-              <MenuItem value="FRIDAY">금요일</MenuItem>
-              <MenuItem value="SATURDAY">토요일</MenuItem>
-              <MenuItem value="SUNDAY">일요일</MenuItem>
-            </Select>
-          </FormControl>
+              <FormControl fullWidth margin="normal">
+                <InputLabel>요일</InputLabel>
+                <Select
+                  name="dayOfWeek"
+                  value={formData.dayOfWeek}
+                  onChange={handleChange}
+                  label="요일"
+                  disabled={loading}
+                >
+                  <MenuItem value="MONDAY">월요일</MenuItem>
+                  <MenuItem value="TUESDAY">화요일</MenuItem>
+                  <MenuItem value="WEDNESDAY">수요일</MenuItem>
+                  <MenuItem value="THURSDAY">목요일</MenuItem>
+                  <MenuItem value="FRIDAY">금요일</MenuItem>
+                  <MenuItem value="SATURDAY">토요일</MenuItem>
+                  <MenuItem value="SUNDAY">일요일</MenuItem>
+                </Select>
+              </FormControl>
 
-          <FormControl fullWidth margin="normal" required>
-            <InputLabel>시작 시간</InputLabel>
-            <Select
-              name="startTime"
-              value={formData.startTime}
-              onChange={handleTimeChange}
-              label="시작 시간"
-              disabled={loading}
-            >
-              {timeOptions.map((option) => (
-                <MenuItem key={option.value} value={option.value}>
-                  {option.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+              <FormControl fullWidth margin="normal" required>
+                <InputLabel>시작 시간</InputLabel>
+                <Select
+                  name="startTime"
+                  value={formData.startTime}
+                  onChange={handleTimeChange}
+                  label="시작 시간"
+                  disabled={loading}
+                >
+                  {timeOptions.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>
+                      {option.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </>
+          )}
+
+          {isWithdrawnClass && (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              "퇴원" 반은 과목, 요일, 시작 시간이 필요하지 않습니다. 모든 과목 사용자에게 노출됩니다.
+            </Alert>
+          )}
 
           <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
             <Button

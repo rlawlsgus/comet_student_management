@@ -3,7 +3,8 @@
  * @param timeString - "14:00:00" 형식의 시간 문자열
  * @returns "14:00" 형식의 시간 문자열
  */
-export const formatTime = (timeString: string): string => {
+export const formatTime = (timeString: string | null | undefined): string => {
+  if (!timeString) return '-';
   try {
     // "14:00:00" 형식을 "14:00" 형식으로 변환
     const time = new Date(`2000-01-01T${timeString}`);

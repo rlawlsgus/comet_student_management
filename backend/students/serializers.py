@@ -178,6 +178,10 @@ class ClassSerializer(serializers.ModelSerializer):
 
     def validate_subject(self, value):
         """과목 검증"""
+        # "퇴원" 반일 경우 null 허용
+        if self.initial_data.get("name") == "퇴원":
+            return value
+        
         valid_subjects = ["CHEMISTRY", "BIOLOGY", "GEOSCIENCE"]
         if value not in valid_subjects:
             raise serializers.ValidationError("유효하지 않은 과목입니다.")
@@ -185,6 +189,10 @@ class ClassSerializer(serializers.ModelSerializer):
 
     def validate_day_of_week(self, value):
         """요일 검증"""
+        # "퇴원" 반일 경우 null 허용
+        if self.initial_data.get("name") == "퇴원":
+            return value
+
         valid_days = [
             "MONDAY",
             "TUESDAY",
@@ -200,18 +208,26 @@ class ClassSerializer(serializers.ModelSerializer):
 
     def validate_start_time(self, value):
         """시작 시간 검증"""
+        # "퇴원" 반일 경우 null 허용
+        if self.initial_data.get("name") == "퇴원":
+            return value
+
         if not value:
             raise serializers.ValidationError("시작 시간은 필수 입력 항목입니다.")
         return value
 
     def validate(self, attrs):
         """전체 데이터 검증"""
-        # 같은 과목, 같은 요일, 같은 시간에 중복된 반이 있는지 확인
         name = attrs.get("name")
         subject = attrs.get("subject")
         day_of_week = attrs.get("day_of_week")
         start_time = attrs.get("start_time")
 
+        if name == "퇴원":
+            # "퇴원" 반은 중복 검사 생략 (이미 create 뷰에서 처리함)
+            return attrs
+
+        # 같은 과목, 같은 요일, 같은 시간에 중복된 반이 있는지 확인
         if all([name, subject, day_of_week, start_time]):
             # 수정 시에는 자기 자신을 제외하고 중복 확인
             instance = getattr(self, "instance", None)
@@ -299,9 +315,10 @@ class StudentSerializer(serializers.ModelSerializer):
 
         if user and user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
             class_ids = ret.get("classes", [])
+            from django.db.models import Q
             filtered_class_ids = list(
                 Class.objects.filter(
-                    id__in=class_ids, subject=user.subject
+                    Q(id__in=class_ids) & (Q(subject=user.subject) | Q(name="퇴원"))
                 ).values_list("id", flat=True)
             )
             ret["classes"] = filtered_class_ids
@@ -534,7 +551,8 @@ class StudentDetailSerializer(StudentSerializer):
         # Filter the classes queryset based on the user's role
         classes_queryset = instance.classes.all()
         if user and user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
-            classes_queryset = classes_queryset.filter(subject=user.subject)
+            from django.db.models import Q
+            classes_queryset = classes_queryset.filter(Q(subject=user.subject) | Q(name="퇴원"))
 
         # Serialize the filtered classes and assign to the 'classes' field
         ret["classes"] = ClassForStudentDetailSerializer(

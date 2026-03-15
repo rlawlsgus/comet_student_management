@@ -40,11 +40,19 @@ class Class(models.Model):
 
     name = models.CharField(max_length=100, verbose_name="반이름")
     subject = models.CharField(
-        max_length=20, choices=User.Subject.choices, verbose_name="과목"
+        max_length=20,
+        choices=User.Subject.choices,
+        verbose_name="과목",
+        null=True,
+        blank=True,
     )
-    start_time = models.TimeField(verbose_name="수업 시작시간")
+    start_time = models.TimeField(verbose_name="수업 시작시간", null=True, blank=True)
     day_of_week = models.CharField(
-        max_length=10, choices=DayOfWeek.choices, verbose_name="요일"
+        max_length=10,
+        choices=DayOfWeek.choices,
+        verbose_name="요일",
+        null=True,
+        blank=True,
     )
     students = models.ManyToManyField(
         "Student", related_name="classes", blank=True, verbose_name="학생들"
