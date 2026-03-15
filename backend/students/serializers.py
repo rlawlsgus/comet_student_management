@@ -245,6 +245,7 @@ class StudentSerializer(serializers.ModelSerializer):
             "classes",
             "parent_phone",
             "student_phone",
+            "school",
             "attendance_stats",
             "exam_stats",
             "created_at",

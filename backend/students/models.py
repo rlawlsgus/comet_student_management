@@ -66,6 +66,9 @@ class Student(models.Model):
     student_phone = models.CharField(
         max_length=15, null=True, blank=True, verbose_name="학생 전화번호"
     )
+    school = models.CharField(
+        max_length=100, null=True, blank=True, verbose_name="학교"
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="생성일")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="수정일")
 

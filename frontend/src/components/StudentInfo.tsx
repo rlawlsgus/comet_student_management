@@ -15,6 +15,7 @@ interface Student {
   id: number;
   name: string;
   classes: number[];
+  school?: string;
 }
 
 interface StudentInfoProps {
@@ -60,7 +61,9 @@ const StudentInfo: React.FC<StudentInfoProps> = ({ students, selectedClassId, on
                 onClick={() => onStudentSelect(student)}
                 sx={{ cursor: 'pointer', '&:hover': { backgroundColor: '#f5f5f5' } }}
               >
-                <TableCell>{student.name}</TableCell>
+                <TableCell>
+                  {student.name} {student.school ? `(${student.school})` : ''}
+                </TableCell>
               </TableRow>
             ))
           ) : (

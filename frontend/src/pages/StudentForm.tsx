@@ -21,6 +21,7 @@ import { studentAPI, classAPI } from '../services/api';
 interface StudentFormData {
   name: string;
   classes: number[];
+  school: string;
   parentPhone: string;
   studentPhone?: string;
 }
@@ -38,6 +39,7 @@ const StudentForm: React.FC = () => {
   const [formData, setFormData] = useState<StudentFormData>({
     name: '',
     classes: [],
+    school: '',
     parentPhone: '',
     studentPhone: '',
   });
@@ -84,6 +86,7 @@ const StudentForm: React.FC = () => {
       setFormData({
         name: studentData.name,
         classes: classIds,
+        school: studentData.school || '',
         parentPhone: studentData.parent_phone,
         studentPhone: studentData.student_phone || '',
       });
@@ -138,6 +141,7 @@ const StudentForm: React.FC = () => {
       const studentData = {
         name: formData.name,
         classes: formData.classes,
+        school: formData.school,
         parent_phone: formData.parentPhone,
         student_phone: formData.studentPhone || '',
       };
@@ -224,6 +228,17 @@ const StudentForm: React.FC = () => {
               ))}
             </Select>
           </FormControl>
+
+          <TextField
+            fullWidth
+            label="학교"
+            name="school"
+            value={formData.school}
+            onChange={handleChange}
+            margin="normal"
+            disabled={loading}
+            placeholder="예: 혜성고등학교"
+          />
 
           <TextField
             fullWidth

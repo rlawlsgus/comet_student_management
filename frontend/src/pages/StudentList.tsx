@@ -53,6 +53,7 @@ interface Student {
   classes: number[];
   parent_phone: string;
   student_phone?: string;
+  school?: string;
   attendance_stats: {
     total_classes: number;
     attended_classes: number;
@@ -456,6 +457,7 @@ const StudentList: React.FC = () => {
               <TableCell sx={{ whiteSpace: 'nowrap' }}>ID</TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>이름</TableCell>
               <TableCell>수강 반</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>학교</TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>부모님 전화번호</TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>학생 전화번호</TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>출석률</TableCell>
@@ -474,6 +476,7 @@ const StudentList: React.FC = () => {
                     return <Chip key={classId} label={className || '알 수 없는 반'} size="small" sx={{ mr: 0.5, mb: 0.5 }} />;
                   })}
                 </TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{student.school || '-'}</TableCell>
                 <TableCell sx={{ whiteSpace: 'nowrap' }}>{student.parent_phone}</TableCell>
                 <TableCell sx={{ whiteSpace: 'nowrap' }}>{student.student_phone || '-'}</TableCell>
                 <TableCell sx={{ whiteSpace: 'nowrap' }}>

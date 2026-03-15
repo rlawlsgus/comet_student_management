@@ -36,6 +36,7 @@ interface Student {
   id: number;
   name: string;
   classes: { id: number; name: string; subject: string }[];
+  school?: string;
   attendance_records?: {
     date: string;
     class_type: string;
@@ -284,7 +285,9 @@ const StudentDetail: React.FC<StudentDetailProps> = ({ student, selectedClassId 
 
   return (
     <Box>
-      <Typography variant="h6" gutterBottom>{student.name} 학생 상세 정보</Typography>
+      <Typography variant="h6" gutterBottom>
+        {student.name} {student.school ? `(${student.school})` : ''} 학생 상세 정보
+      </Typography>
       <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
         <Tabs value={tabValue} onChange={handleTabChange}>
           <Tab label="수업 내역" />

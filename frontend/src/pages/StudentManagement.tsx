@@ -40,6 +40,7 @@ interface Student {
   id: number;
   name: string;
   classes: { id: number; name: string }[];
+  school?: string;
   parent_phone: string;
   student_phone?: string;
 }
@@ -412,7 +413,7 @@ const StudentManagement: React.FC = () => {
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
         <Typography variant="h4">
-          {student.name} 학생 관리
+          {student.name} {student.school ? `(${student.school})` : ''} 학생 관리
         </Typography>
         <Box sx={{ display: 'flex', gap: 2 }}>
           <Button
