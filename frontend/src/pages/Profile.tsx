@@ -13,10 +13,17 @@ import {
   Alert,
   Divider,
   CircularProgress,
+  OutlinedInput,
+  Chip,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { userAPI } from '../services/api';
+import { userAPI, subjectAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+
+interface Subject {
+  id: number;
+  name: string;
+}
 
 interface ProfileData {
   username: string;
@@ -25,12 +32,13 @@ interface ProfileData {
   currentPassword: string;
   newPassword: string;
   confirmNewPassword: string;
-  subject: 'CHEMISTRY' | 'BIOLOGY' | 'GEOSCIENCE';
+  subjects: number[];
 }
 
 const Profile: React.FC = () => {
   const { user, updateUser, logout } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [availableSubjects, setAvailableSubjects] = useState<Subject[]>([]);
   const [profileData, setProfileData] = useState<ProfileData>({
     username: '',
     name: '',
@@ -38,7 +46,7 @@ const Profile: React.FC = () => {
     currentPassword: '',
     newPassword: '',
     confirmNewPassword: '',
-    subject: 'CHEMISTRY',
+    subjects: [],
   });
   const [error, setError] = useState<string>('');
   const [success, setSuccess] = useState<string>('');
@@ -48,33 +56,43 @@ const Profile: React.FC = () => {
   // 조교인지 확인
   const isAssistant = user?.role === 'ASSISTANT';
 
-  // 컴포넌트 마운트 시 현재 사용자 정보 가져오기
+  // 컴포넌트 마운트 시 데이터 가져오기
   useEffect(() => {
-    // 컴포넌트가 마운트되었는지 확인
     if (!mountedRef.current) {
       mountedRef.current = true;
-      const fetchProfile = async () => {
+      const init = async () => {
         try {
-          const profile = await userAPI.getProfile();
+          const [profile, subjectsData] = await Promise.all([
+            userAPI.getProfile(),
+            subjectAPI.getSubjects()
+          ]);
+          
+          setAvailableSubjects(subjectsData);
+          
+          // profile.subjects가 [{id, name}, ...] 형태일 수 있으므로 id만 추출
+          const subjectIds = Array.isArray(profile.subjects)
+            ? profile.subjects.map((s: any) => typeof s === 'object' ? s.id : s)
+            : [];
+
           setProfileData(prev => ({
             ...prev,
             username: profile.username,
             name: profile.name,
             role: profile.role,
-            subject: profile.subject,
+            subjects: subjectIds,
           }));
         } catch (err) {
-          setError('프로필 정보를 불러오는 중 오류가 발생했습니다.');
+          setError('정보를 불러오는 중 오류가 발생했습니다.');
         } finally {
           setLoading(false);
         }
       };
 
-      fetchProfile();
+      init();
     }
   }, []);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | { name?: string; value: unknown }> | any) => {
+  const handleChange = (e: any) => {
     const { name, value } = e.target;
     setProfileData(prev => ({
       ...prev,
@@ -87,7 +105,6 @@ const Profile: React.FC = () => {
     setError('');
     setSuccess('');
 
-    // 조교는 프로필 업데이트 불가
     if (isAssistant) {
       setError('조교는 프로필 정보를 수정할 수 없습니다.');
       return;
@@ -97,12 +114,11 @@ const Profile: React.FC = () => {
       const updateData = {
         name: profileData.name,
         role: profileData.role,
-        subject: profileData.subject,
+        subjects: profileData.subjects,
       };
 
       const updatedProfile = await userAPI.updateProfile(updateData);
       
-      // AuthContext의 사용자 정보도 업데이트
       if (updateUser) {
         updateUser(updatedProfile);
       }
@@ -119,7 +135,7 @@ const Profile: React.FC = () => {
     setSuccess('');
 
     if (profileData.newPassword !== profileData.confirmNewPassword) {
-      setError('새 비밀번호가 일치하지 않습니다.');
+      setError('비밀번호가 일치하지 않습니다.');
       return;
     }
 
@@ -138,7 +154,6 @@ const Profile: React.FC = () => {
       await userAPI.changePassword(passwordData);
       setSuccess('비밀번호가 성공적으로 변경되었습니다. 로그인 페이지로 이동합니다.');
       
-      // 비밀번호 필드 초기화
       setProfileData(prev => ({
         ...prev,
         currentPassword: '',
@@ -146,7 +161,6 @@ const Profile: React.FC = () => {
         confirmNewPassword: '',
       }));
 
-      // 2초 후 로그아웃 및 로그인 페이지로 이동
       setTimeout(async () => {
         try {
           await logout();
@@ -189,7 +203,6 @@ const Profile: React.FC = () => {
         )}
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-          {/* 프로필 정보 */}
           <Box>
             <Box component="form" onSubmit={handleProfileUpdate}>
               <Typography variant="h6" gutterBottom>
@@ -238,17 +251,27 @@ const Profile: React.FC = () => {
               </FormControl>
 
               <FormControl fullWidth margin="normal">
-                <InputLabel>과목</InputLabel>
+                <InputLabel>과목 (다중 선택 가능)</InputLabel>
                 <Select
-                  name="subject"
-                  value={profileData.subject}
+                  multiple
+                  name="subjects"
+                  value={profileData.subjects}
                   onChange={handleChange}
-                  label="과목"
+                  input={<OutlinedInput label="과목 (다중 선택 가능)" />}
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {(selected as number[]).map((value) => (
+                        <Chip key={value} label={availableSubjects.find(s => s.id === value)?.name || value} />
+                      ))}
+                    </Box>
+                  )}
                   disabled={isAssistant}
                 >
-                  <MenuItem value="CHEMISTRY">화학</MenuItem>
-                  <MenuItem value="BIOLOGY">생명</MenuItem>
-                  <MenuItem value="GEOSCIENCE">지학</MenuItem>
+                  {availableSubjects.map((subject) => (
+                    <MenuItem key={subject.id} value={subject.id}>
+                      {subject.name}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
 
@@ -266,7 +289,6 @@ const Profile: React.FC = () => {
 
           <Divider sx={{ my: 2 }} />
 
-          {/* 비밀번호 변경 */}
           <Box>
             <Box component="form" onSubmit={handlePasswordChange}>
               <Typography variant="h6" gutterBottom>
@@ -322,4 +344,4 @@ const Profile: React.FC = () => {
   );
 };
 
-export default Profile; 
+export default Profile;

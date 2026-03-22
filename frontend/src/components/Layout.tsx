@@ -23,6 +23,7 @@ import {
   ExitToApp as LogoutIcon,
   Class as ClassIcon,
   School as SchoolIcon,
+  LibraryBooks as SubjectIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -54,6 +55,12 @@ const Layout: React.FC = () => {
     // 관리자와 선생님만 회원 관리 메뉴를 볼 수 있음
     if (user?.role === 'ADMIN' || user?.role === 'TEACHER') {
       baseItems.splice(1, 0, { text: '회원 관리', icon: <PeopleIcon />, path: '/users' });
+    }
+
+    // 관리자만 과목 관리 메뉴를 볼 수 있음 (회원 관리 아래)
+    if (user?.role === 'ADMIN') {
+      const index = (user?.role === 'ADMIN' || user?.role === 'TEACHER') ? 2 : 1;
+      baseItems.splice(index, 0, { text: '과목 관리', icon: <SubjectIcon />, path: '/subjects' });
     }
 
     return baseItems;

@@ -17,7 +17,7 @@ class AttendanceViewSet(viewsets.ModelViewSet):
         user = self.request.user
 
         if user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
-            queryset = queryset.filter(class_info__subject=user.subject)
+            queryset = queryset.filter(Q(class_info__subject__in=user.subjects.all()) | Q(class_info__name="퇴원"))
 
         student_id = self.request.query_params.get("student_id", None)
         class_id = self.request.query_params.get("class_id", None)
@@ -41,7 +41,7 @@ class AttendanceViewSet(viewsets.ModelViewSet):
             if class_id:
                 try:
                     class_obj = Class.objects.get(id=class_id)
-                    if class_obj.subject != request.user.subject:
+                    if class_obj.name != "퇴원" and class_obj.subject not in request.user.subjects.all():
                         return Response(
                             {"detail": "자신의 과목의 반에 대한 출석 기록만 생성할 수 있습니다."},
                             status=status.HTTP_403_FORBIDDEN,
@@ -61,7 +61,7 @@ class AttendanceViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         if request.user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
             instance = self.get_object()
-            if instance.class_info and instance.class_info.subject != request.user.subject:
+            if instance.class_info and instance.class_info.name != "퇴원" and instance.class_info.subject not in request.user.subjects.all():
                 return Response(
                     {"detail": "자신의 과목의 학생의 출석 기록만 수정할 수 있습니다."},
                     status=status.HTTP_403_FORBIDDEN,
@@ -72,7 +72,7 @@ class AttendanceViewSet(viewsets.ModelViewSet):
     def partial_update(self, request, *args, **kwargs):
         if request.user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
             instance = self.get_object()
-            if instance.class_info and instance.class_info.subject != request.user.subject:
+            if instance.class_info and instance.class_info.name != "퇴원" and instance.class_info.subject not in request.user.subjects.all():
                 return Response(
                     {"detail": "자신의 과목의 학생의 출석 기록만 수정할 수 있습니다."},
                     status=status.HTTP_403_FORBIDDEN,
@@ -83,7 +83,7 @@ class AttendanceViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         if request.user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
             instance = self.get_object()
-            if instance.class_info and instance.class_info.subject != request.user.subject:
+            if instance.class_info and instance.class_info.name != "퇴원" and instance.class_info.subject not in request.user.subjects.all():
                 return Response(
                     {"detail": "자신의 과목의 학생의 출석 기록만 삭제할 수 있습니다."},
                     status=status.HTTP_403_FORBIDDEN,
@@ -113,7 +113,7 @@ class ExamViewSet(viewsets.ModelViewSet):
 
         if user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
             queryset = queryset.filter(
-                attendance__class_info__subject=user.subject
+                Q(attendance__class_info__subject__in=user.subjects.all()) | Q(attendance__class_info__name="퇴원")
             )
 
         student_id = self.request.query_params.get("student_id", None)
@@ -138,7 +138,7 @@ class ExamViewSet(viewsets.ModelViewSet):
 
         if user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
             queryset = queryset.filter(
-                attendance__class_info__subject=user.subject
+                Q(attendance__class_info__subject__in=user.subjects.all()) | Q(attendance__class_info__name="퇴원")
             )
 
         if class_id:
@@ -163,7 +163,7 @@ class ExamViewSet(viewsets.ModelViewSet):
             if attendance_id:
                 try:
                     attendance = Attendance.objects.get(id=attendance_id)
-                    if attendance.class_info and attendance.class_info.subject != request.user.subject:
+                    if attendance.class_info and attendance.class_info.name != "퇴원" and attendance.class_info.subject not in request.user.subjects.all():
                         return Response(
                             {
                                 "detail": "자신의 과목의 학생의 시험 기록만 생성할 수 있습니다."
@@ -185,7 +185,7 @@ class ExamViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         if request.user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
             instance = self.get_object()
-            if instance.attendance.class_info and instance.attendance.class_info.subject != request.user.subject:
+            if instance.attendance.class_info and instance.attendance.class_info.name != "퇴원" and instance.attendance.class_info.subject not in request.user.subjects.all():
                 return Response(
                     {"detail": "자신의 과목의 학생의 시험 기록만 수정할 수 있습니다."},
                     status=status.HTTP_403_FORBIDDEN,
@@ -196,7 +196,7 @@ class ExamViewSet(viewsets.ModelViewSet):
     def partial_update(self, request, *args, **kwargs):
         if request.user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
             instance = self.get_object()
-            if instance.attendance.class_info and instance.attendance.class_info.subject != request.user.subject:
+            if instance.attendance.class_info and instance.attendance.class_info.name != "퇴원" and instance.attendance.class_info.subject not in request.user.subjects.all():
                 return Response(
                     {"detail": "자신의 과목의 학생의 시험 기록만 수정할 수 있습니다."},
                     status=status.HTTP_403_FORBIDDEN,
@@ -207,7 +207,7 @@ class ExamViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         if request.user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
             instance = self.get_object()
-            if instance.attendance.class_info and instance.attendance.class_info.subject != request.user.subject:
+            if instance.attendance.class_info and instance.attendance.class_info.name != "퇴원" and instance.attendance.class_info.subject not in request.user.subjects.all():
                 return Response(
                     {"detail": "자신의 과목의 학생의 시험 기록만 삭제할 수 있습니다."},
                     status=status.HTTP_403_FORBIDDEN,

@@ -1,22 +1,36 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
-from .models import User, Class, Student, Attendance, Exam
+from .models import User, Class, Student, Attendance, Exam, Subject
+
+
+class SubjectSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Subject
+        fields = ["id", "name"]
 
 
 class UserSerializer(serializers.ModelSerializer):
+    subjects = SubjectSerializer(many=True, read_only=True)
+    subject_ids = serializers.PrimaryKeyRelatedField(
+        many=True, write_only=True, queryset=Subject.objects.all(), source="subjects"
+    )
+
     class Meta:
         model = User
-        fields = ["id", "username", "name", "role", "subject", "date_joined"]
+        fields = ["id", "username", "name", "role", "subjects", "subject_ids", "date_joined"]
         read_only_fields = ["id", "date_joined"]
 
 
 class UserCreateSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     confirm_password = serializers.CharField(write_only=True)
+    subjects = serializers.PrimaryKeyRelatedField(
+        many=True, queryset=Subject.objects.all(), required=False
+    )
 
     class Meta:
         model = User
-        fields = ["username", "password", "confirm_password", "name", "role", "subject"]
+        fields = ["username", "password", "confirm_password", "name", "role", "subjects"]
 
     def validate_username(self, value):
         """아이디 검증"""
@@ -65,13 +79,6 @@ class UserCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("유효하지 않은 역할입니다.")
         return value
 
-    def validate_subject(self, value):
-        """과목 검증"""
-        valid_subjects = ["CHEMISTRY", "BIOLOGY", "GEOSCIENCE"]
-        if value not in valid_subjects:
-            raise serializers.ValidationError("유효하지 않은 과목입니다.")
-        return value
-
     def validate(self, attrs):
         if attrs["password"] != attrs["confirm_password"]:
             raise serializers.ValidationError("비밀번호가 일치하지 않습니다.")
@@ -79,14 +86,20 @@ class UserCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data.pop("confirm_password")
+        subjects = validated_data.pop("subjects", [])
         user = User.objects.create_user(**validated_data)
+        user.subjects.set(subjects)
         return user
 
 
 class UserUpdateSerializer(serializers.ModelSerializer):
+    subjects = serializers.PrimaryKeyRelatedField(
+        many=True, queryset=Subject.objects.all(), required=False
+    )
+
     class Meta:
         model = User
-        fields = ["name", "role", "subject"]
+        fields = ["name", "role", "subjects"]
 
     def validate_name(self, value):
         """이름 검증"""
@@ -106,13 +119,6 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         valid_roles = ["ADMIN", "TEACHER", "ASSISTANT"]
         if value not in valid_roles:
             raise serializers.ValidationError("유효하지 않은 역할입니다.")
-        return value
-
-    def validate_subject(self, value):
-        """과목 검증"""
-        valid_subjects = ["CHEMISTRY", "BIOLOGY", "GEOSCIENCE"]
-        if value not in valid_subjects:
-            raise serializers.ValidationError("유효하지 않은 과목입니다.")
         return value
 
 
@@ -142,6 +148,12 @@ class ClassSerializer(serializers.ModelSerializer):
     students = serializers.PrimaryKeyRelatedField(
         many=True, queryset=Student.objects.all(), required=False
     )
+    # Read-only field for display
+    subject_detail = SubjectSerializer(source="subject", read_only=True)
+    # Field for writing (inputting ID)
+    subject = serializers.PrimaryKeyRelatedField(
+        queryset=Subject.objects.all(), required=False, allow_null=True
+    )
 
     class Meta:
         model = Class
@@ -149,6 +161,7 @@ class ClassSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "subject",
+            "subject_detail",
             "start_time",
             "day_of_week",
             "student_count",
@@ -182,9 +195,8 @@ class ClassSerializer(serializers.ModelSerializer):
         if self.initial_data.get("name") == "퇴원":
             return value
         
-        valid_subjects = ["CHEMISTRY", "BIOLOGY", "GEOSCIENCE"]
-        if value not in valid_subjects:
-            raise serializers.ValidationError("유효하지 않은 과목입니다.")
+        if value is None:
+            raise serializers.ValidationError("과목은 필수 입력 항목입니다.")
         return value
 
     def validate_day_of_week(self, value):
@@ -275,7 +287,7 @@ class StudentSerializer(serializers.ModelSerializer):
 
         attendances = obj.attendance_set.all()
         if user and user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
-            attendances = attendances.filter(class_info__subject=user.subject)
+            attendances = attendances.filter(class_info__subject__in=user.subjects.all())
 
         total_classes = attendances.count()
         attended_classes = attendances.filter(is_late=False).count()
@@ -293,7 +305,7 @@ class StudentSerializer(serializers.ModelSerializer):
 
         exams = Exam.objects.filter(attendance__student=obj)
         if user and user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
-            exams = exams.filter(attendance__class_info__subject=user.subject)
+            exams = exams.filter(attendance__class_info__subject__in=user.subjects.all())
 
         if not exams.exists():
             return {"average_score": 0, "highest_score": 0, "lowest_score": 0}
@@ -318,7 +330,7 @@ class StudentSerializer(serializers.ModelSerializer):
             from django.db.models import Q
             filtered_class_ids = list(
                 Class.objects.filter(
-                    Q(id__in=class_ids) & (Q(subject=user.subject) | Q(name="퇴원"))
+                    Q(id__in=class_ids) & (Q(subject__in=user.subjects.all()) | Q(name="퇴원"))
                 ).values_list("id", flat=True)
             )
             ret["classes"] = filtered_class_ids
@@ -525,7 +537,7 @@ class StudentDetailSerializer(StudentSerializer):
 
         attendances = obj.attendance_set.all().order_by("-date")
         if user and user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
-            attendances = attendances.filter(class_info__subject=user.subject)
+            attendances = attendances.filter(class_info__subject__in=user.subjects.all())
 
         return AttendanceSerializer(attendances, many=True, context=self.context).data
 
@@ -537,7 +549,7 @@ class StudentDetailSerializer(StudentSerializer):
             "-attendance__date"
         )
         if user and user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
-            exams = exams.filter(attendance__class_info__subject=user.subject)
+            exams = exams.filter(attendance__class_info__subject__in=user.subjects.all())
 
         return ExamSerializer(exams, many=True, context=self.context).data
 
@@ -552,7 +564,7 @@ class StudentDetailSerializer(StudentSerializer):
         classes_queryset = instance.classes.all()
         if user and user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
             from django.db.models import Q
-            classes_queryset = classes_queryset.filter(Q(subject=user.subject) | Q(name="퇴원"))
+            classes_queryset = classes_queryset.filter(Q(subject__in=user.subjects.all()) | Q(name="퇴원"))
 
         # Serialize the filtered classes and assign to the 'classes' field
         ret["classes"] = ClassForStudentDetailSerializer(

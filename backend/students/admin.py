@@ -1,18 +1,24 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User, Class, Student, Attendance, Exam
+from .models import Subject, User, Class, Student, Attendance, Exam
+
+
+@admin.register(Subject)
+class SubjectAdmin(admin.ModelAdmin):
+    list_display = ["name"]
+    search_fields = ["name"]
 
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
-    list_display = ["username", "name", "role", "subject", "is_active", "date_joined"]
-    list_filter = ["role", "subject", "is_active", "date_joined"]
+    list_display = ["username", "name", "role", "is_active", "date_joined"]
+    list_filter = ["role", "subjects", "is_active", "date_joined"]
     search_fields = ["username", "name"]
     ordering = ["-date_joined"]
 
-    fieldsets = UserAdmin.fieldsets + (("추가 정보", {"fields": ("role", "subject")}),)
+    fieldsets = UserAdmin.fieldsets + (("추가 정보", {"fields": ("role", "subjects")}),)
     add_fieldsets = UserAdmin.add_fieldsets + (
-        ("추가 정보", {"fields": ("role", "subject")}),
+        ("추가 정보", {"fields": ("role", "subjects")}),
     )
 
 
@@ -26,7 +32,7 @@ class ClassAdmin(admin.ModelAdmin):
         "student_count",
         "created_at",
     ]
-    list_filter = ["subject", "day_of_week", "created_at"]
+    list_filter = ["subject__name", "day_of_week", "created_at"]
     search_fields = ["name"]
     ordering = ["-created_at"]
 
@@ -39,7 +45,7 @@ class ClassAdmin(admin.ModelAdmin):
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
     list_display = ["name", "parent_phone", "student_phone", "created_at"]
-    list_filter = ["classes__subject", "classes", "created_at"]
+    list_filter = ["classes__subject__name", "classes", "created_at"]
     search_fields = ["name", "parent_phone", "student_phone"]
     ordering = ["-created_at"]
 
@@ -56,7 +62,7 @@ class AttendanceAdmin(admin.ModelAdmin):
         "homework_completion",
         "homework_accuracy",
     ]
-    list_filter = ["class_type", "is_late", "date", "class_info__subject"]
+    list_filter = ["class_type", "is_late", "date", "class_info__subject__name"]
     search_fields = ["student__name", "content"]
     ordering = ["-date"]
     date_hierarchy = "date"
@@ -65,6 +71,6 @@ class AttendanceAdmin(admin.ModelAdmin):
 @admin.register(Exam)
 class ExamAdmin(admin.ModelAdmin):
     list_display = ["name", "attendance", "score", "created_at"]
-    list_filter = ["score", "created_at", "attendance__class_info__subject"]
+    list_filter = ["score", "created_at", "attendance__class_info__subject__name"]
     search_fields = ["name", "attendance__student__name"]
     ordering = ["-created_at"]

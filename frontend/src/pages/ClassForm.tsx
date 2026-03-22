@@ -14,11 +14,16 @@ import {
   CircularProgress,
 } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
-import { classAPI } from '../services/api';
+import { classAPI, subjectAPI } from '../services/api';
+
+interface Subject {
+  id: number;
+  name: string;
+}
 
 interface ClassFormData {
   name: string;
-  subject?: 'CHEMISTRY' | 'BIOLOGY' | 'GEOSCIENCE' | null;
+  subject?: number | null;
   dayOfWeek?: 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY' | null;
   startTime?: string | null;
 }
@@ -27,22 +32,41 @@ const ClassForm: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const isEdit = Boolean(id);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [formData, setFormData] = useState<ClassFormData>({
     name: '',
-    subject: 'CHEMISTRY',
+    subject: null,
     dayOfWeek: 'MONDAY',
     startTime: '',
   });
   const [error, setError] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
-  const [initialLoading, setInitialLoading] = useState<boolean>(isEdit);
+  const [initialLoading, setInitialLoading] = useState<boolean>(true);
   const [isWithdrawnClass, setIsWithdrawnClass] = useState<boolean>(false);
 
   useEffect(() => {
-    if (isEdit && id) {
-      loadClassData(Number(id));
-    }
+    const init = async () => {
+      await fetchSubjects();
+      if (isEdit && id) {
+        await loadClassData(Number(id));
+      } else {
+        setInitialLoading(false);
+      }
+    };
+    init();
   }, [isEdit, id]);
+
+  const fetchSubjects = async () => {
+    try {
+      const data = await subjectAPI.getSubjects();
+      setSubjects(data);
+      if (data.length > 0 && !isEdit) {
+        setFormData(prev => ({ ...prev, subject: data[0].id }));
+      }
+    } catch (err) {
+      console.error('과목 목록을 불러오는데 실패했습니다.', err);
+    }
+  };
 
   const loadClassData = async (classId: number) => {
     try {
@@ -53,9 +77,14 @@ const ClassForm: React.FC = () => {
       setIsWithdrawnClass(isWithdrawn);
 
       // 백엔드에서 받은 데이터를 프론트엔드 형식으로 변환
+      // 과목이 객체로 올 수 있으므로 id만 추출
+      const subjectId = typeof classData.subject === 'object' && classData.subject !== null 
+        ? classData.subject.id 
+        : classData.subject;
+
       setFormData({
         name: classData.name,
-        subject: classData.subject || 'CHEMISTRY',
+        subject: subjectId || null,
         dayOfWeek: classData.day_of_week || 'MONDAY',
         startTime: classData.start_time || '',
       });
@@ -66,7 +95,7 @@ const ClassForm: React.FC = () => {
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | { name?: string; value: unknown }> | any) => {
+  const handleChange = (e: any) => {
     const { name, value } = e.target;
     
     if (name === 'name') {
@@ -94,13 +123,6 @@ const ClassForm: React.FC = () => {
 
   const timeOptions = generateTimeOptions();
 
-  const handleTimeChange = (e: any) => {
-    setFormData(prev => ({
-      ...prev,
-      startTime: e.target.value,
-    }));
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -112,6 +134,12 @@ const ClassForm: React.FC = () => {
       return;
     }
 
+    if (!isWithdrawnClass && !formData.subject) {
+      setError('과목을 선택해주세요.');
+      setLoading(false);
+      return;
+    }
+
     if (!isWithdrawnClass && !formData.startTime) {
       setError('시작 시간은 필수 입력 항목입니다.');
       setLoading(false);
@@ -119,8 +147,6 @@ const ClassForm: React.FC = () => {
     }
 
     try {
-      // 백엔드로 보낼 때 시간 형식이 "HH:mm:ss" 또는 "HH:mm" 인지 확인 필요
-      // 현재 Select에서 "HH:mm:00" 형식을 사용함
       const classData = {
         name: formData.name,
         subject: isWithdrawnClass ? null : formData.subject,
@@ -136,19 +162,11 @@ const ClassForm: React.FC = () => {
       
       navigate('/classes');
     } catch (err: any) {
-      // ... 에러 처리 로직 동일
       let errorMessage = '반 저장 중 오류가 발생했습니다.';
-      
       if (err.message) {
-        if (typeof err.message === 'string') {
-          errorMessage = err.message;
-        } else if (err.message.detail) {
-          errorMessage = err.message.detail;
-        } else if (err.message.error) {
-          errorMessage = err.message.error;
-        }
+        if (typeof err.message === 'string') errorMessage = err.message;
+        else if (err.message.detail) errorMessage = err.message.detail;
       }
-      
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -197,14 +215,20 @@ const ClassForm: React.FC = () => {
                 <InputLabel>과목</InputLabel>
                 <Select
                   name="subject"
-                  value={formData.subject}
+                  value={formData.subject || ''}
                   onChange={handleChange}
                   label="과목"
                   disabled={loading}
+                  required
                 >
-                  <MenuItem value="CHEMISTRY">화학</MenuItem>
-                  <MenuItem value="BIOLOGY">생명</MenuItem>
-                  <MenuItem value="GEOSCIENCE">지학</MenuItem>
+                  {subjects.map((s) => (
+                    <MenuItem key={s.id} value={s.id}>
+                      {s.name}
+                    </MenuItem>
+                  ))}
+                  {subjects.length === 0 && (
+                    <MenuItem disabled>등록된 과목이 없습니다</MenuItem>
+                  )}
                 </Select>
               </FormControl>
 
@@ -212,7 +236,7 @@ const ClassForm: React.FC = () => {
                 <InputLabel>요일</InputLabel>
                 <Select
                   name="dayOfWeek"
-                  value={formData.dayOfWeek}
+                  value={formData.dayOfWeek || ''}
                   onChange={handleChange}
                   label="요일"
                   disabled={loading}
@@ -231,8 +255,8 @@ const ClassForm: React.FC = () => {
                 <InputLabel>시작 시간</InputLabel>
                 <Select
                   name="startTime"
-                  value={formData.startTime}
-                  onChange={handleTimeChange}
+                  value={formData.startTime || ''}
+                  onChange={handleChange}
                   label="시작 시간"
                   disabled={loading}
                 >
@@ -266,7 +290,7 @@ const ClassForm: React.FC = () => {
               type="submit"
               variant="contained"
               fullWidth
-              disabled={loading}
+              disabled={loading || (!isWithdrawnClass && subjects.length === 0)}
               startIcon={loading ? <CircularProgress size={20} /> : null}
             >
               {isEdit ? '수정' : '추가'}
@@ -278,4 +302,4 @@ const ClassForm: React.FC = () => {
   );
 };
 
-export default ClassForm; 
+export default ClassForm;

@@ -16,6 +16,7 @@ import ClassForm from './pages/ClassForm';
 import StudentList from './pages/StudentList';
 import StudentForm from './pages/StudentForm';
 import StudentManagement from './pages/StudentManagement';
+import SubjectList from './pages/SubjectList';
 import './styles/App.css';
 
 const App: React.FC = () => {
@@ -33,6 +34,11 @@ const App: React.FC = () => {
             }>
               <Route index element={<Dashboard />} />
               {/* 관리자만 접근 가능한 페이지들 */}
+              <Route path="subjects" element={
+                <ProtectedRoute allowedRoles={['ADMIN']}>
+                  <SubjectList />
+                </ProtectedRoute>
+              } />
               <Route path="users" element={
                 <ProtectedRoute allowedRoles={['ADMIN', 'TEACHER']}>
                   <UserList />

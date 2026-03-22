@@ -352,6 +352,37 @@ export const examAPI = {
   },
 };
 
+// 과목 관련 API
+export const subjectAPI = {
+  getSubjects: async () => {
+    return apiCall("/subjects/");
+  },
+
+  getSubject: async (id: number) => {
+    return apiCall(`/subjects/${id}/`);
+  },
+
+  createSubject: async (subjectData: any) => {
+    return apiCall("/subjects/", {
+      method: "POST",
+      body: JSON.stringify(subjectData),
+    });
+  },
+
+  updateSubject: async (id: number, subjectData: any) => {
+    return apiCall(`/subjects/${id}/`, {
+      method: "PUT",
+      body: JSON.stringify(subjectData),
+    });
+  },
+
+  deleteSubject: async (id: number) => {
+    return apiCall(`/subjects/${id}/`, {
+      method: "DELETE",
+    });
+  },
+};
+
 // 대시보드 관련 API
 export const dashboardAPI = {
   getDashboardStats: async (classId?: number, month?: Date) => {

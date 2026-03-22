@@ -14,11 +14,14 @@ class Command(BaseCommand):
 
         self.stdout.write("Creating new data...")
         
+        # 0. Create Subjects
+        subjects = self._create_subjects()
+
         # 1. Create Users
-        users = self._create_users()
+        users = self._create_users(subjects)
 
         # 2. Create Classes
-        classes = self._create_classes()
+        classes = self._create_classes(subjects)
 
         # 3. Create Students
         students = self._create_students()
@@ -38,33 +41,51 @@ class Command(BaseCommand):
         Student.objects.all().delete()
         Class.objects.all().delete()
         User.objects.filter(is_superuser=False).delete()
+        Subject.objects.all().delete()
 
-    def _create_users(self):
+    def _create_subjects(self):
+        """Creates initial subjects."""
+        subject_names = ["화학", "생명과학", "지구과학"]
+        subjects = {name: Subject.objects.create(name=name) for name in subject_names}
+        self.stdout.write(f"  - Created {len(subjects)} subjects.")
+        return subjects
+
+    def _create_users(self, subjects):
         """Creates Admin, Teacher, and Assistant users."""
         users = {}
         users['admin'] = User.objects.create_superuser(
             username="admin", password="password", email="admin@test.com", name="관리자"
         )
-        users['teacher_chem'] = User.objects.create_user(
-            username="teacher_chem", password="password", name="김화학", role=User.Role.TEACHER, subject=User.Subject.CHEMISTRY
+        
+        teacher_chem = User.objects.create_user(
+            username="teacher_chem", password="password", name="김화학", role=User.Role.TEACHER
         )
-        users['teacher_bio'] = User.objects.create_user(
-            username="teacher_bio", password="password", name="박생명", role=User.Role.TEACHER, subject=User.Subject.BIOLOGY
+        teacher_chem.subjects.add(subjects["화학"])
+        users['teacher_chem'] = teacher_chem
+
+        teacher_bio = User.objects.create_user(
+            username="teacher_bio", password="password", name="박생명", role=User.Role.TEACHER
         )
-        users['teacher_geo'] = User.objects.create_user(
-            username="teacher_geo", password="password", name="이과학", role=User.Role.TEACHER, subject=User.Subject.GEOSCIENCE
+        teacher_bio.subjects.add(subjects["생명과학"])
+        users['teacher_bio'] = teacher_bio
+
+        teacher_geo = User.objects.create_user(
+            username="teacher_geo", password="password", name="이과학", role=User.Role.TEACHER
         )
+        teacher_geo.subjects.add(subjects["지구과학"])
+        users['teacher_geo'] = teacher_geo
+
         self.stdout.write(f"  - Created {len(users)} users.")
         return users
 
-    def _create_classes(self):
+    def _create_classes(self, subjects):
         """Creates classes for each subject."""
         classes_to_create = [
-            {'name': '화학1 심화반', 'subject': User.Subject.CHEMISTRY, 'day_of_week': Class.DayOfWeek.MONDAY, 'start_time': time(18, 0)},
-            {'name': '화학2 기본반', 'subject': User.Subject.CHEMISTRY, 'day_of_week': Class.DayOfWeek.WEDNESDAY, 'start_time': time(19, 30)},
-            {'name': '생명1 심화반', 'subject': User.Subject.BIOLOGY, 'day_of_week': Class.DayOfWeek.TUESDAY, 'start_time': time(18, 0)},
-            {'name': '생명2 기본반', 'subject': User.Subject.BIOLOGY, 'day_of_week': Class.DayOfWeek.FRIDAY, 'start_time': time(19, 0)},
-            {'name': '지구과학1', 'subject': User.Subject.GEOSCIENCE, 'day_of_week': Class.DayOfWeek.SATURDAY, 'start_time': time(14, 0)},
+            {'name': '화학1 심화반', 'subject': subjects["화학"], 'day_of_week': Class.DayOfWeek.MONDAY, 'start_time': time(18, 0)},
+            {'name': '화학2 기본반', 'subject': subjects["화학"], 'day_of_week': Class.DayOfWeek.WEDNESDAY, 'start_time': time(19, 30)},
+            {'name': '생명1 심화반', 'subject': subjects["생명과학"], 'day_of_week': Class.DayOfWeek.TUESDAY, 'start_time': time(18, 0)},
+            {'name': '생명2 기본반', 'subject': subjects["생명과학"], 'day_of_week': Class.DayOfWeek.FRIDAY, 'start_time': time(19, 0)},
+            {'name': '지구과학1', 'subject': subjects["지구과학"], 'day_of_week': Class.DayOfWeek.SATURDAY, 'start_time': time(14, 0)},
         ]
         classes = [Class.objects.create(**data) for data in classes_to_create]
         self.stdout.write(f"  - Created {len(classes)} classes.")

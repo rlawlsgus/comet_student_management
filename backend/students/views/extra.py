@@ -7,8 +7,21 @@ from datetime import date
 import requests
 import calendar
 
-from ..models import User, Class, Student, Attendance, Exam
+from ..models import User, Class, Student, Attendance, Exam, Subject
 
+
+from rest_framework import permissions, status, viewsets
+from ..serializers import SubjectSerializer
+
+class SubjectViewSet(viewsets.ModelViewSet):
+    queryset = Subject.objects.all()
+    serializer_class = SubjectSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action in ["create", "update", "partial_update", "destroy"]:
+            return [permissions.IsAdminUser()]
+        return super().get_permissions()
 
 class DashboardView(APIView):
     """
@@ -56,7 +69,8 @@ class DashboardView(APIView):
     def _get_accessible_classes(self, user):
         classes = Class.objects.all()
         if user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
-            return classes.filter(subject=user.subject)
+            from django.db.models import Q
+            return classes.filter(Q(subject__in=user.subjects.all()) | Q(name="퇴원"))
         return classes
 
     def _get_class_list_stats(self, classes):
@@ -64,7 +78,7 @@ class DashboardView(APIView):
             {
                 "id": c.id,
                 "name": c.name,
-                "subject": c.subject,
+                "subject": c.subject.name if c.subject else "과목없음",
                 "student_count": c.students.count(),
             }
             for c in classes
@@ -239,12 +253,6 @@ class AlimtalkService:
 
         # 과목명 - 수업종류 (예: 화학 - 정규)
         subject_name = att.get("subject_display", "미지정")
-        # 생명 -> 생명과학, 지학 -> 지구과학으로 매핑 (사용자 요청 반영)
-        if subject_name == "생명":
-            subject_name = "생명과학"
-        elif subject_name == "지학":
-            subject_name = "지구과학"
-
         class_type_info = f"{subject_name} - {att['class_type_display']}"
 
         exam_lines = []
@@ -306,15 +314,18 @@ class KakaoNotificationView(APIView):
         if not s_id or not a_id:
             return Response({"detail": "필수 ID가 누락되었습니다."}, status=400)
 
-        student = Student.objects.get(id=s_id)
-        attendance = Attendance.objects.get(id=a_id, student=student)
+        try:
+            student = Student.objects.get(id=s_id)
+            attendance = Attendance.objects.get(id=a_id, student=student)
+        except (Student.DoesNotExist, Attendance.DoesNotExist):
+            return Response({"detail": "데이터를 찾을 수 없습니다."}, status=404)
 
         # 권한 체크
         if request.user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
-            if (
-                not attendance.class_info
-                or attendance.class_info.subject != request.user.subject
-            ):
+            if attendance.class_info:
+                if not request.user.subjects.filter(id=attendance.class_info.subject_id).exists():
+                     return Response({"detail": "권한이 없습니다."}, status=403)
+            elif attendance.class_info and attendance.class_info.name != "퇴원":
                 return Response({"detail": "권한이 없습니다."}, status=403)
 
         data = self._prepare_notification_data(student, attendance)
@@ -330,16 +341,26 @@ class KakaoNotificationView(APIView):
 
         students = Student.objects.filter(id__in=student_ids)
         if request.user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
-            students = students.filter(classes__subject=request.user.subject).distinct()
+            from django.db.models import Q
+            students = students.filter(
+                Q(classes__subject__in=request.user.subjects.all()) | Q(classes__name="퇴원")
+            ).distinct()
 
         bulk_data = []
         for st in students:
+            # 해당 날짜의 출석 기록 찾기
             att = Attendance.objects.filter(student=st, date=target_date).first()
+            # 만약 여러 반에 속해있다면, 선생님이 권한을 가진 반의 기록만 가져오도록 필터링 추가 필요할 수 있음
+            if att and request.user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
+                if att.class_info and not request.user.subjects.filter(id=att.class_info.subject_id).exists() and att.class_info.name != "퇴원":
+                    continue
+            
             if att:
                 bulk_data.append(self._prepare_notification_data(st, att))
 
         if not bulk_data:
-            return Response({"detail": "출석 기록이 없습니다."}, status=400)
+            return Response({"detail": "전송할 출석 기록이 없습니다."}, status=400)
+        
         if request.data.get("preview"):
             return Response(bulk_data)
 
@@ -355,14 +376,18 @@ class KakaoNotificationView(APIView):
 
     def _prepare_notification_data(self, student, attendance):
         related_exams = Exam.objects.filter(attendance=attendance)
-        stats = (
-            Exam.objects.filter(
-                attendance__class_info=attendance.class_info,
-                name__in=related_exams.values_list("name", flat=True),
+        
+        # 반 평균 및 최고점 계산
+        stats = []
+        if attendance.class_info:
+            stats = (
+                Exam.objects.filter(
+                    attendance__class_info=attendance.class_info,
+                    name__in=related_exams.values_list("name", flat=True),
+                )
+                .values("name")
+                .annotate(avg=Avg("score"), high=Max("score"))
             )
-            .values("name")
-            .annotate(avg=Avg("score"), high=Max("score"))
-        )
 
         exams = []
         for e in related_exams:
@@ -389,8 +414,8 @@ class KakaoNotificationView(APIView):
                 "date": attendance.date.strftime("%Y-%m-%d"),
                 "class_type_display": attendance.get_class_type_display(),
                 "subject_display": (
-                    attendance.class_info.get_subject_display()
-                    if attendance.class_info
+                    attendance.class_info.subject.name
+                    if attendance.class_info and attendance.class_info.subject
                     else "미지정"
                 ),
                 "content": attendance.content,

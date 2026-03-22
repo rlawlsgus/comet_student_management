@@ -29,7 +29,8 @@ import { formatTime } from '../utils/dateUtils';
 interface Class {
   id: number;
   name: string;
-  subject?: 'CHEMISTRY' | 'BIOLOGY' | 'GEOSCIENCE' | null;
+  subject?: number | null;
+  subject_detail?: { id: number; name: string } | null;
   day_of_week?: 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY' | null;
   start_time?: string | null;
   student_count: number;
@@ -136,16 +137,6 @@ const ClassList: React.FC = () => {
     return days[day as keyof typeof days] || day;
   };
 
-  const getSubjectName = (subject: string | null | undefined) => {
-    if (!subject) return '-';
-    const subjects = {
-      'CHEMISTRY': '화학',
-      'BIOLOGY': '생명',
-      'GEOSCIENCE': '지학',
-    };
-    return subjects[subject as keyof typeof subjects] || subject;
-  };
-
   // 조교는 추가/수정/삭제 권한이 없음
   const canEdit = user?.role !== 'ASSISTANT';
 
@@ -195,7 +186,9 @@ const ClassList: React.FC = () => {
               <TableRow key={classItem.id}>
                 <TableCell>{classItem.id}</TableCell>
                 <TableCell>{classItem.name}</TableCell>
-                <TableCell>{getSubjectName(classItem.subject)}</TableCell>
+                <TableCell>
+                  {classItem.name === '퇴원' ? '-' : (classItem.subject_detail?.name || '-')}
+                </TableCell>
                 <TableCell>{getDayOfWeek(classItem.day_of_week)}</TableCell>
                 <TableCell>{formatTime(classItem.start_time)}</TableCell>
                 <TableCell>{classItem.student_count}</TableCell>

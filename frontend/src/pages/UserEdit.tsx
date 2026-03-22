@@ -12,17 +12,24 @@ import {
   MenuItem,
   Alert,
   CircularProgress,
+  OutlinedInput,
+  Chip,
 } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
-import { userAPI } from '../services/api';
+import { userAPI, subjectAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+
+interface Subject {
+  id: number;
+  name: string;
+}
 
 interface User {
   id: number;
   username: string;
   name: string;
   role: 'ADMIN' | 'TEACHER' | 'ASSISTANT';
-  subject: 'CHEMISTRY' | 'BIOLOGY' | 'GEOSCIENCE';
+  subjects: number[];
 }
 
 const UserEdit: React.FC = () => {
@@ -30,33 +37,56 @@ const UserEdit: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { user: currentUser } = useAuth();
   const [newPassword, setNewPassword] = useState<string>('');
+  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [user, setUser] = useState<User>({
     id: 0,
     username: '',
     name: '',
     role: 'TEACHER',
-    subject: 'CHEMISTRY',
+    subjects: [],
   });
   const [error, setError] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [initialLoading, setInitialLoading] = useState<boolean>(true);
+  const [fetchingSubjects, setFetchingSubjects] = useState(true);
 
   useEffect(() => {
-    if (id) {
-      loadUserData(Number(id));
-    }
+    const init = async () => {
+      await fetchSubjects();
+      if (id) {
+        await loadUserData(Number(id));
+      }
+    };
+    init();
   }, [id]);
+
+  const fetchSubjects = async () => {
+    try {
+      const data = await subjectAPI.getSubjects();
+      setSubjects(data);
+    } catch (err) {
+      console.error('과목 목록을 불러오는데 실패했습니다.', err);
+    } finally {
+      setFetchingSubjects(false);
+    }
+  };
 
   const loadUserData = async (userId: number) => {
     try {
       setInitialLoading(true);
       const userData = await userAPI.getUser(userId);
+      
+      // 백엔드에서 subjects가 [{id, name}, ...] 형태로 오므로 id만 추출
+      const subjectIds = Array.isArray(userData.subjects) 
+        ? userData.subjects.map((s: any) => typeof s === 'object' ? s.id : s)
+        : [];
+
       setUser({
         id: userData.id,
         username: userData.username,
         name: userData.name,
         role: userData.role,
-        subject: userData.subject,
+        subjects: subjectIds,
       });
     } catch (err) {
       setError('사용자 정보를 불러오는 중 오류가 발생했습니다.');
@@ -65,7 +95,7 @@ const UserEdit: React.FC = () => {
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | { name?: string; value: unknown }> | any) => {
+  const handleChange = (e: any) => {
     const { name, value } = e.target;
     setUser(prev => ({
       ...prev,
@@ -86,7 +116,7 @@ const UserEdit: React.FC = () => {
       const payload: any = {
         name: user.name,
         role: user.role,
-        subject: user.subject,
+        subjects: user.subjects,
       };
 
       if (canChangePassword && newPassword.trim().length > 0) {
@@ -97,21 +127,13 @@ const UserEdit: React.FC = () => {
       }
 
       await userAPI.updateUser(user.id, payload);
-      navigate('/users'); // 회원 목록 페이지로 이동
+      navigate('/users');
     } catch (err: any) {
-      // 백엔드에서 오는 에러 메시지 처리
       let errorMessage = '사용자 정보 수정 중 오류가 발생했습니다.';
-      
       if (err.message) {
-        if (typeof err.message === 'string') {
-          errorMessage = err.message;
-        } else if (err.message.detail) {
-          errorMessage = err.message.detail;
-        } else if (err.message.error) {
-          errorMessage = err.message.error;
-        }
+        if (typeof err.message === 'string') errorMessage = err.message;
+        else if (err.message.detail) errorMessage = err.message.detail;
       }
-      
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -181,21 +203,33 @@ const UserEdit: React.FC = () => {
           </FormControl>
 
           <FormControl fullWidth margin="normal">
-            <InputLabel>과목</InputLabel>
+            <InputLabel>과목 (다중 선택 가능)</InputLabel>
             <Select
-              name="subject"
-              value={user.subject}
+              multiple
+              name="subjects"
+              value={user.subjects}
               onChange={handleChange}
-              label="과목"
-              disabled={loading}
+              input={<OutlinedInput label="과목 (다중 선택 가능)" />}
+              renderValue={(selected) => (
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                  {(selected as number[]).map((value) => (
+                    <Chip key={value} label={subjects.find(s => s.id === value)?.name || value} />
+                  ))}
+                </Box>
+              )}
+              disabled={loading || fetchingSubjects}
             >
-              <MenuItem value="CHEMISTRY">화학</MenuItem>
-              <MenuItem value="BIOLOGY">생명</MenuItem>
-              <MenuItem value="GEOSCIENCE">지학</MenuItem>
+              {subjects.map((subject) => (
+                <MenuItem key={subject.id} value={subject.id}>
+                  {subject.name}
+                </MenuItem>
+              ))}
+              {subjects.length === 0 && !fetchingSubjects && (
+                <MenuItem disabled>등록된 과목이 없습니다</MenuItem>
+              )}
             </Select>
           </FormControl>
 
-          {/* 비밀번호 변경 (권한 조건: 관리자, 또는 선생님이 조교 수정 시) */}
           {((currentUser?.role === 'ADMIN') || (currentUser?.role === 'TEACHER' && user.role === 'ASSISTANT')) && (
             <TextField
               fullWidth
@@ -224,7 +258,7 @@ const UserEdit: React.FC = () => {
               type="submit"
               variant="contained"
               fullWidth
-              disabled={loading}
+              disabled={loading || fetchingSubjects}
               startIcon={loading ? <CircularProgress size={20} /> : null}
             >
               수정
@@ -236,4 +270,4 @@ const UserEdit: React.FC = () => {
   );
 };
 
-export default UserEdit; 
+export default UserEdit;

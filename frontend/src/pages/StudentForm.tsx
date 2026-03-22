@@ -29,7 +29,7 @@ interface StudentFormData {
 interface Class {
   id: number;
   name: string;
-  subject: 'CHEMISTRY' | 'BIOLOGY' | 'GEOSCIENCE';
+  subject?: number | null;
 }
 
 const StudentForm: React.FC = () => {

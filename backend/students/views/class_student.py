@@ -24,7 +24,7 @@ class ClassViewSet(viewsets.ModelViewSet):
 
         if user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
             # 사용자의 과목에 해당하는 반 또는 "퇴원" 반을 가져옴
-            queryset = queryset.filter(Q(subject=user.subject) | Q(name="퇴원"))
+            queryset = queryset.filter(Q(subject__in=user.subjects.all()) | Q(name="퇴원"))
 
         subject = self.request.query_params.get("subject", None)
         if subject:
@@ -56,7 +56,8 @@ class ClassViewSet(viewsets.ModelViewSet):
                 )
             # "퇴원" 반은 누구나 생성 가능 (관리자나 선생님)
         elif request.user.role == User.Role.TEACHER:
-            if request.data.get("subject") != request.user.subject:
+            subject_id = request.data.get("subject")
+            if subject_id and not request.user.subjects.filter(id=subject_id).exists():
                 return Response(
                     {"detail": "자신의 과목의 반만 생성할 수 있습니다."},
                     status=status.HTTP_403_FORBIDDEN,
@@ -84,15 +85,16 @@ class ClassViewSet(viewsets.ModelViewSet):
             )
 
         if request.user.role == User.Role.TEACHER:
-            if instance.name != "퇴원" and instance.subject != request.user.subject:
+            if instance.name != "퇴원" and instance.subject not in request.user.subjects.all():
                 return Response(
                     {"detail": "자신의 과목의 반만 수정할 수 있습니다."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
+            subject_id = request.data.get("subject")
             if (
-                request.data.get("subject")
-                and request.data.get("subject") != request.user.subject
+                subject_id
+                and not request.user.subjects.filter(id=subject_id).exists()
                 and request.data.get("name") != "퇴원"
             ):
                 return Response(
@@ -118,15 +120,16 @@ class ClassViewSet(viewsets.ModelViewSet):
             )
 
         if request.user.role == User.Role.TEACHER:
-            if instance.name != "퇴원" and instance.subject != request.user.subject:
+            if instance.name != "퇴원" and instance.subject not in request.user.subjects.all():
                 return Response(
                     {"detail": "자신의 과목의 반만 수정할 수 있습니다."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
+            subject_id = request.data.get("subject")
             if (
-                request.data.get("subject")
-                and request.data.get("subject") != request.user.subject
+                subject_id
+                and not request.user.subjects.filter(id=subject_id).exists()
                 and (request.data.get("name") or instance.name) != "퇴원"
             ):
                 return Response(
@@ -152,7 +155,7 @@ class ClassViewSet(viewsets.ModelViewSet):
             )
 
         if request.user.role == User.Role.TEACHER:
-            if instance.subject != request.user.subject:
+            if instance.subject not in request.user.subjects.all():
                 return Response(
                     {"detail": "자신의 과목의 반만 삭제할 수 있습니다."},
                     status=status.HTTP_403_FORBIDDEN,
@@ -182,7 +185,7 @@ class StudentViewSet(viewsets.ModelViewSet):
         if user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
             # 사용자의 과목에 속한 반의 학생이거나, 반이 없거나, "퇴원" 반(subject=None)에 속한 학생
             queryset = queryset.filter(
-                Q(classes__subject=user.subject) | 
+                Q(classes__subject__in=user.subjects.all()) | 
                 Q(classes__subject__isnull=True) |
                 Q(classes__isnull=True)
             ).distinct()
@@ -241,7 +244,7 @@ class StudentViewSet(viewsets.ModelViewSet):
             is_assigned = instance.classes.exists()
             # 반이 없거나, 자신의 과목 반에 속해있거나, "퇴원" 반에 속해있으면 삭제 가능
             can_delete = not is_assigned or instance.classes.filter(
-                Q(subject=request.user.subject) | Q(name="퇴원")
+                Q(subject__in=request.user.subjects.all()) | Q(name="퇴원")
             ).exists()
             if not can_delete:
                 return Response(
@@ -281,13 +284,13 @@ class StudentViewSet(viewsets.ModelViewSet):
         attendances = student.attendance_set.all().order_by("-date")
         if user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
             # 자신의 과목 반 학생이거나 "퇴원" 반 학생인 경우 접근 허용
-            if not student.classes.filter(Q(subject=user.subject) | Q(name="퇴원")).exists():
+            if not student.classes.filter(Q(subject__in=user.subjects.all()) | Q(name="퇴원")).exists():
                 return Response(
                     {"detail": "해당 학생의 출석 기록에 접근할 권한이 없습니다."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
             # 출석 기록 필터링: 자신의 과목 또는 "퇴원" 반 기록
-            attendances = attendances.filter(Q(class_info__subject=user.subject) | Q(class_info__name="퇴원"))
+            attendances = attendances.filter(Q(class_info__subject__in=user.subjects.all()) | Q(class_info__name="퇴원"))
 
         serializer = AttendanceSerializer(attendances, many=True)
         return Response(serializer.data)
@@ -301,13 +304,13 @@ class StudentViewSet(viewsets.ModelViewSet):
             "-attendance__date"
         )
         if user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
-            if not student.classes.filter(Q(subject=user.subject) | Q(name="퇴원")).exists():
+            if not student.classes.filter(Q(subject__in=user.subjects.all()) | Q(name="퇴원")).exists():
                 return Response(
                     {"detail": "해당 학생의 시험 기록에 접근할 권한이 없습니다."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
             # 시험 기록 필터링: 자신의 과목 또는 "퇴원" 반 기록
-            exams = exams.filter(Q(attendance__class_info__subject=user.subject) | Q(attendance__class_info__name="퇴원"))
+            exams = exams.filter(Q(attendance__class_info__subject__in=user.subjects.all()) | Q(attendance__class_info__name="퇴원"))
 
         serializer = ExamSerializer(exams, many=True)
         return Response(serializer.data)

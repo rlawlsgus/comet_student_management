@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Container,
   Paper,
@@ -12,10 +12,17 @@ import {
   MenuItem,
   Alert,
   CircularProgress,
+  OutlinedInput,
+  Chip,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { userAPI } from '../services/api';
+import { userAPI, subjectAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+
+interface Subject {
+  id: number;
+  name: string;
+}
 
 interface RegisterFormData {
   username: string;
@@ -23,24 +30,40 @@ interface RegisterFormData {
   confirmPassword: string;
   name: string;
   role: 'ADMIN' | 'TEACHER' | 'ASSISTANT';
-  subject: 'CHEMISTRY' | 'BIOLOGY' | 'GEOSCIENCE';
+  subjects: number[];
 }
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
+  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [formData, setFormData] = useState<RegisterFormData>({
     username: '',
     password: '',
     confirmPassword: '',
     name: '',
     role: 'TEACHER',
-    subject: 'CHEMISTRY',
+    subjects: [],
   });
   const [error, setError] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [fetchingSubjects, setFetchingSubjects] = useState(true);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | { name?: string; value: unknown }> | any) => {
+  useEffect(() => {
+    const fetchSubjects = async () => {
+      try {
+        const data = await subjectAPI.getSubjects();
+        setSubjects(data);
+      } catch (err) {
+        console.error('과목 목록을 불러오는데 실패했습니다.', err);
+      } finally {
+        setFetchingSubjects(false);
+      }
+    };
+    fetchSubjects();
+  }, []);
+
+  const handleChange = (e: any) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
@@ -66,34 +89,23 @@ const Register: React.FC = () => {
     }
 
     try {
-      // 백엔드로 전송할 데이터 준비
       const backendData = {
         username: formData.username,
         password: formData.password,
         confirm_password: formData.confirmPassword,
         name: formData.name,
         role: formData.role,
-        subject: formData.subject,
+        subjects: formData.subjects,
       };
 
-      const response = await userAPI.createUser(backendData);
-      navigate('/users'); // 회원 목록 페이지로 이동
+      await userAPI.createUser(backendData);
+      navigate('/users');
     } catch (err: any) {
-
-      
-      // 백엔드에서 오는 에러 메시지 처리
-      let errorMessage = '회원가입 중 오류가 발생했습니다.';
-      
+      let errorMessage = '회원 등록 중 오류가 발생했습니다.';
       if (err.message) {
-        if (typeof err.message === 'string') {
-          errorMessage = err.message;
-        } else if (err.message.detail) {
-          errorMessage = err.message.detail;
-        } else if (err.message.error) {
-          errorMessage = err.message.error;
-        }
+        if (typeof err.message === 'string') errorMessage = err.message;
+        else if (err.message.detail) errorMessage = err.message.detail;
       }
-      
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -123,7 +135,6 @@ const Register: React.FC = () => {
             margin="normal"
             required
             disabled={loading}
-            helperText="2자 이상 30자 이하로 입력해주세요"
           />
           
           <TextField
@@ -136,7 +147,6 @@ const Register: React.FC = () => {
             margin="normal"
             required
             disabled={loading}
-            helperText="8자 이상으로 입력해주세요"
           />
           
           <TextField
@@ -160,7 +170,6 @@ const Register: React.FC = () => {
             margin="normal"
             required
             disabled={loading}
-            helperText="2자 이상 50자 이하로 입력해주세요"
           />
           
           <FormControl fullWidth margin="normal">
@@ -181,17 +190,30 @@ const Register: React.FC = () => {
           </FormControl>
 
           <FormControl fullWidth margin="normal">
-            <InputLabel>과목</InputLabel>
+            <InputLabel>과목 (다중 선택 가능)</InputLabel>
             <Select
-              name="subject"
-              value={formData.subject}
+              multiple
+              name="subjects"
+              value={formData.subjects}
               onChange={handleChange}
-              label="과목"
-              disabled={loading}
+              input={<OutlinedInput label="과목 (다중 선택 가능)" />}
+              renderValue={(selected) => (
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                  {(selected as number[]).map((value) => (
+                    <Chip key={value} label={subjects.find(s => s.id === value)?.name || value} />
+                  ))}
+                </Box>
+              )}
+              disabled={loading || fetchingSubjects}
             >
-              <MenuItem value="CHEMISTRY">화학</MenuItem>
-              <MenuItem value="BIOLOGY">생명</MenuItem>
-              <MenuItem value="GEOSCIENCE">지학</MenuItem>
+              {subjects.map((subject) => (
+                <MenuItem key={subject.id} value={subject.id}>
+                  {subject.name}
+                </MenuItem>
+              ))}
+              {subjects.length === 0 && !fetchingSubjects && (
+                <MenuItem disabled>등록된 과목이 없습니다</MenuItem>
+              )}
             </Select>
           </FormControl>
 
@@ -200,7 +222,7 @@ const Register: React.FC = () => {
             fullWidth
             variant="contained"
             sx={{ mt: 3 }}
-            disabled={loading}
+            disabled={loading || fetchingSubjects}
             startIcon={loading ? <CircularProgress size={20} /> : null}
           >
             {loading ? '등록 중...' : '등록'}
@@ -211,4 +233,4 @@ const Register: React.FC = () => {
   );
 };
 
-export default Register; 
+export default Register;

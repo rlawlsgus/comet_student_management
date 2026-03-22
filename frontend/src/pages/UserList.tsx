@@ -19,6 +19,7 @@ import {
   Alert,
   CircularProgress,
   Snackbar,
+  Chip,
 } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
@@ -30,7 +31,7 @@ interface User {
   username: string;
   name: string;
   role: 'ADMIN' | 'TEACHER' | 'ASSISTANT';
-  subject: 'CHEMISTRY' | 'BIOLOGY' | 'GEOSCIENCE';
+  subjects: { id: number; name: string }[];
   date_joined: string;
 }
 
@@ -125,15 +126,6 @@ const UserList: React.FC = () => {
     return roles[role as keyof typeof roles] || role;
   };
 
-  const getSubjectDisplay = (subject: string) => {
-    const subjects = {
-      'CHEMISTRY': '화학',
-      'BIOLOGY': '생명',
-      'GEOSCIENCE': '지학',
-    };
-    return subjects[subject as keyof typeof subjects] || subject;
-  };
-
   const canEdit = currentUser?.role !== 'ASSISTANT';
 
   if (loading) {
@@ -184,7 +176,17 @@ const UserList: React.FC = () => {
                 <TableCell>{user.username}</TableCell>
                 <TableCell>{user.name}</TableCell>
                 <TableCell>{getRoleDisplay(user.role)}</TableCell>
-                <TableCell>{getSubjectDisplay(user.subject)}</TableCell>
+                <TableCell>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {user.subjects && user.subjects.length > 0 ? (
+                      user.subjects.map((subject) => (
+                        <Chip key={subject.id} label={subject.name} size="small" variant="outlined" />
+                      ))
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">-</Typography>
+                    )}
+                  </Box>
+                </TableCell>
                 <TableCell>
                   {new Date(user.date_joined).toLocaleDateString('ko-KR')}
                 </TableCell>

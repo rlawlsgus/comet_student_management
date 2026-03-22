@@ -41,11 +41,16 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { studentAPI, classAPI, attendanceAPI, examAPI, notificationAPI } from '../services/api';
+import { studentAPI, classAPI, attendanceAPI, examAPI, notificationAPI, subjectAPI } from '../services/api';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { format } from 'date-fns';
+
+interface Subject {
+  id: number;
+  name: string;
+}
 
 interface Student {
   id: number;
@@ -69,7 +74,8 @@ interface Student {
 interface Class {
   id: number;
   name: string;
-  subject: 'CHEMISTRY' | 'BIOLOGY' | 'GEOSCIENCE';
+  subject: number;
+  subject_detail?: { id: number; name: string };
 }
 
 const StudentList: React.FC = () => {
@@ -77,6 +83,7 @@ const StudentList: React.FC = () => {
   const { user } = useAuth();
   const [students, setStudents] = useState<Student[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null);
@@ -124,12 +131,14 @@ const StudentList: React.FC = () => {
 
   const fetchData = async () => {
     try {
-      const [studentsResponse, classesResponse] = await Promise.all([
+      const [studentsResponse, classesResponse, subjectsResponse] = await Promise.all([
         studentAPI.getStudents(),
-        classAPI.getClasses()
+        classAPI.getClasses(),
+        subjectAPI.getSubjects()
       ]);
       setStudents(studentsResponse);
       setClasses(classesResponse);
+      setSubjects(subjectsResponse);
     } catch (error) {
 
     } finally {
@@ -147,11 +156,12 @@ const StudentList: React.FC = () => {
 
   const filteredStudents = students.filter(student => {
     if (filters.subject) {
+      const targetSubjectId = Number(filters.subject);
       const studentClassSubjects = student.classes.map(classId => {
         const foundClass = classes.find(c => c.id === classId);
         return foundClass ? foundClass.subject : null;
       });
-      if (!studentClassSubjects.includes(filters.subject as any)) {
+      if (!studentClassSubjects.includes(targetSubjectId)) {
         return false;
       }
     }
@@ -167,7 +177,7 @@ const StudentList: React.FC = () => {
     return true;
   });
 
-  const filteredClasses = classes.filter(c => !filters.subject || c.subject === filters.subject);
+  const filteredClasses = classes.filter(c => !filters.subject || c.subject === Number(filters.subject));
 
   const handleEdit = (studentId: number) => {
     navigate(`/students/${studentId}/edit`);
@@ -432,9 +442,9 @@ const StudentList: React.FC = () => {
             <InputLabel>과목</InputLabel>
             <Select name="subject" value={filters.subject} onChange={handleFilterChange} label="과목">
               <MenuItem value="">전체</MenuItem>
-              <MenuItem value="CHEMISTRY">화학</MenuItem>
-              <MenuItem value="BIOLOGY">생명</MenuItem>
-              <MenuItem value="GEOSCIENCE">지학</MenuItem>
+              {subjects.map(s => (
+                <MenuItem key={s.id} value={s.id.toString()}>{s.name}</MenuItem>
+              ))}
             </Select>
           </FormControl>
           <FormControl fullWidth>

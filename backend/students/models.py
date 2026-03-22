@@ -3,21 +3,27 @@ from django.contrib.auth.models import AbstractUser
 from django.utils.translation import gettext_lazy as _
 
 
+class Subject(models.Model):
+    name = models.CharField(max_length=50, unique=True, verbose_name="과목명")
+
+    class Meta:
+        verbose_name = "과목"
+        verbose_name_plural = "과목"
+
+    def __str__(self):
+        return self.name
+
+
 class User(AbstractUser):
     class Role(models.TextChoices):
         ADMIN = "ADMIN", _("관리자")
         TEACHER = "TEACHER", _("선생님")
         ASSISTANT = "ASSISTANT", _("조교")
 
-    class Subject(models.TextChoices):
-        CHEMISTRY = "CHEMISTRY", _("화학")
-        BIOLOGY = "BIOLOGY", _("생명")
-        GEOSCIENCE = "GEOSCIENCE", _("지학")
-
     name = models.CharField(max_length=100, verbose_name="이름", default="")
     role = models.CharField(max_length=10, choices=Role.choices, verbose_name="권한")
-    subject = models.CharField(
-        max_length=20, choices=Subject.choices, verbose_name="과목"
+    subjects = models.ManyToManyField(
+        Subject, related_name="users", blank=True, verbose_name="권한 과목"
     )
 
     class Meta:
@@ -39,9 +45,9 @@ class Class(models.Model):
         SUNDAY = "SUNDAY", _("일요일")
 
     name = models.CharField(max_length=100, verbose_name="반이름")
-    subject = models.CharField(
-        max_length=20,
-        choices=User.Subject.choices,
+    subject = models.ForeignKey(
+        Subject,
+        on_delete=models.PROTECT,
         verbose_name="과목",
         null=True,
         blank=True,
@@ -65,7 +71,8 @@ class Class(models.Model):
         verbose_name_plural = "반"
 
     def __str__(self):
-        return f"{self.name} ({self.get_subject_display()})"
+        subject_name = self.subject.name if self.subject else "과목없음"
+        return f"{self.name} ({subject_name})"
 
 
 class Student(models.Model):
