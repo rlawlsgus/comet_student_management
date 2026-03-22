@@ -1,12 +1,25 @@
 from django.db import migrations, models
 import django.db.models.deletion
 
+def safe_rename_fields(apps, schema_editor):
+    """컬럼 존재 여부를 확인하고 안전하게 이름을 변경합니다."""
+    with schema_editor.connection.cursor() as cursor:
+        # students_user 테이블 확인: 'subject' 컬럼이 있으면 'old_subject'로 변경
+        cursor.execute("SHOW COLUMNS FROM students_user LIKE 'subject'")
+        if cursor.fetchone():
+            cursor.execute("ALTER TABLE students_user CHANGE subject old_subject varchar(20)")
+        
+        # students_class 테이블 확인: 'subject' 컬럼이 있으면 'old_subject'로 변경
+        cursor.execute("SHOW COLUMNS FROM students_class LIKE 'subject'")
+        if cursor.fetchone():
+            cursor.execute("ALTER TABLE students_class CHANGE subject old_subject varchar(20)")
+
 def migrate_data(apps, schema_editor):
+    """old_subject 필드의 텍스트 데이터를 Subject 모델 객체로 이관합니다."""
     Subject = apps.get_model('students', 'Subject')
     User = apps.get_model('students', 'User')
     Class = apps.get_model('students', 'Class')
 
-    # 1. 초기 과목 데이터 생성
     subjects_map = {
         'CHEMISTRY': '화학',
         'BIOLOGY': '생명과학',
@@ -17,15 +30,17 @@ def migrate_data(apps, schema_editor):
         obj, _ = Subject.objects.get_or_create(name=name)
         obj_map[key] = obj
 
-    # 2. User 데이터 이관 (old_subject -> subjects)
+    # User 데이터 이관
     for user in User.objects.all():
-        if hasattr(user, 'old_subject') and user.old_subject in obj_map:
-            user.subjects.add(obj_map[user.old_subject])
+        old_val = getattr(user, 'old_subject', None)
+        if old_val in obj_map:
+            user.subjects.add(obj_map[old_val])
 
-    # 3. Class 데이터 이관 (old_subject -> subject FK)
+    # Class 데이터 이관
     for class_obj in Class.objects.all():
-        if hasattr(class_obj, 'old_subject') and class_obj.old_subject in obj_map:
-            class_obj.subject = obj_map[class_obj.old_subject]
+        old_val = getattr(class_obj, 'old_subject', None)
+        if old_val in obj_map:
+            class_obj.subject = obj_map[old_val]
             class_obj.save()
 
 class Migration(migrations.Migration):
@@ -35,14 +50,13 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # 외래 키 체크 비활성화 및 이전 실패 흔적 강제 삭제
+        # 1. 외래 키 체크 비활성화 및 이전 실패 흔적(테이블) 강제 삭제
         migrations.RunSQL("SET FOREIGN_KEY_CHECKS = 0;"),
         migrations.RunSQL("DROP TABLE IF EXISTS students_user_subjects;"),
-        migrations.RunSQL("DROP TABLE IF EXISTS students_subject_users;"),
         migrations.RunSQL("DROP TABLE IF EXISTS students_subject;"),
         migrations.RunSQL("SET FOREIGN_KEY_CHECKS = 1;"),
         
-        # Subject 모델 생성
+        # 2. Subject 모델 생성
         migrations.CreateModel(
             name="Subject",
             fields=[
@@ -52,20 +66,27 @@ class Migration(migrations.Migration):
             options={"verbose_name": "과목", "verbose_name_plural": "과목"},
         ),
         
-        # MySQL Collation 에러 해결을 위해 테이블 문자셋 변환 (데이터 생성 전에 실행)
+        # 3. Collation 변환 (MySQL 한글 정렬 에러 방지)
         migrations.RunSQL(
-            "ALTER TABLE students_subject CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;",
-            reverse_sql=migrations.RunSQL.noop
+            "ALTER TABLE students_subject CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;"
         ),
         
-        # 기존 필드 이름 변경 (데이터 보존)
-        # 만약 이미 이전 시도에서 변경되었다면 이 단계에서 에러가 날 수 있으므로
-        # SQL을 통해 컬럼 존재 여부를 확인하고 변경하는 것이 가장 안전하지만, 
-        # DROP TABLE로 관계 테이블을 지웠으므로 RenameField가 정상 작동할 것입니다.
-        migrations.RenameField(model_name="user", old_name="subject", new_name="old_subject"),
-        migrations.RenameField(model_name="class", old_name="subject", new_name="old_subject"),
+        # 4. 안전한 필드 이름 변경 (이미 변경된 경우 에러 없이 통과)
+        migrations.RunPython(safe_rename_fields),
         
-        # 새 관계 필드 추가
+        # 5. 새 관계 필드 추가 (장고 상태 반영용)
+        # RenameField 대신 AddField를 사용하여 이미 바뀐 DB 구조와 장고 모델의 싱크를 맞춥니다.
+        migrations.AddField(
+            model_name="user",
+            name="old_subject",
+            field=models.CharField(max_length=20, null=True, blank=True),
+        ),
+        migrations.AddField(
+            model_name="class",
+            name="old_subject",
+            field=models.CharField(max_length=20, null=True, blank=True),
+        ),
+        
         migrations.AddField(
             model_name="user",
             name="subjects",
@@ -82,6 +103,7 @@ class Migration(migrations.Migration):
                 verbose_name="과목",
             ),
         ),
-        # 데이터 이관 실행
+        
+        # 6. 데이터 이관 실행
         migrations.RunPython(migrate_data),
     ]
