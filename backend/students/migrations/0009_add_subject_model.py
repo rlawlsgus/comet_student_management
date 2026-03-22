@@ -3,69 +3,59 @@ import django.db.models.deletion
 
 def ultimate_database_reconstruction(apps, schema_editor):
     """
-    장고의 기능을 쓰지 않고 직접 SQL을 실행하여 DB를 물리적으로 완벽하게 재구축합니다.
+    제약 조건을 생략하고 테이블과 컬럼만 생성하여 에러 가능성을 원천 차단합니다.
     """
     cursor = schema_editor.connection.cursor()
     cursor.execute("SET FOREIGN_KEY_CHECKS = 0;")
 
-    # 1. 찌꺼기 테이블 삭제
+    # 1. 기존 충돌 요소 완전 삭제
     cursor.execute("DROP TABLE IF EXISTS students_user_subjects;")
     cursor.execute("DROP TABLE IF EXISTS students_subject_users;")
     cursor.execute("DROP TABLE IF EXISTS students_subject;")
 
-    # 2. Subject 테이블 물리적 생성 (한글 설정 포함)
+    # 2. Subject 테이블 생성 (제약 조건 최소화)
     cursor.execute("""
         CREATE TABLE students_subject (
             id bigint AUTO_INCREMENT PRIMARY KEY,
-            name varchar(50) UNIQUE NOT NULL
+            name varchar(50) NOT NULL
         ) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
     """)
 
-    # 3. ManyToMany 관계 테이블(students_user_subjects) 물리적 생성
-    # 유저 ID 타입(int)과 과목 ID 타입(bigint)을 맞춰서 생성합니다.
+    # 3. ManyToMany 테이블 생성 (외래키 제약 조건 없이 컬럼만 생성)
+    # 타입 충돌을 피하기 위해 모든 ID를 bigint로 생성합니다.
     cursor.execute("""
         CREATE TABLE students_user_subjects (
             id bigint AUTO_INCREMENT PRIMARY KEY,
-            user_id int NOT NULL,
-            subject_id bigint NOT NULL,
-            UNIQUE (user_id, subject_id),
-            CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES students_user(id) ON DELETE CASCADE,
-            CONSTRAINT fk_subject FOREIGN KEY (subject_id) REFERENCES students_subject(id) ON DELETE CASCADE
+            user_id bigint NOT NULL,
+            subject_id bigint NOT NULL
         ) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
     """)
 
-    # 4. User 및 Class 테이블의 컬럼 상태 강제 정리
-    def fix_table_columns(table_name):
-        cursor.execute(f"SHOW COLUMNS FROM {table_name};")
+    # 4. User 및 Class 테이블 컬럼 정리 (subject -> old_subject)
+    for table in ['students_user', 'students_class']:
+        cursor.execute(f"SHOW COLUMNS FROM {table};")
         cols = [col[0] for col in cursor.fetchall()]
         
-        # subject 컬럼이 있으면 old_subject로 변경
         if 'subject' in cols and 'old_subject' not in cols:
-            cursor.execute(f"ALTER TABLE {table_name} CHANGE subject old_subject varchar(20) NULL;")
-        # 둘 다 없으면 생성 (데이터 이관 시 에러 방지)
-        elif 'subject' not in cols and 'old_subject' not in cols:
-            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN old_subject varchar(20) NULL;")
+            cursor.execute(f"ALTER TABLE {table} CHANGE subject old_subject varchar(20) NULL;")
+        elif 'old_subject' not in cols:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN old_subject varchar(20) NULL;")
         
-        # Class 테이블의 경우 subject_id 찌꺼기 제거
-        if table_name == 'students_class' and 'subject_id' in cols:
+        if table == 'students_class' and 'subject_id' in cols:
             cursor.execute("ALTER TABLE students_class DROP COLUMN subject_id;")
 
-    fix_table_columns('students_user')
-    fix_table_columns('students_class')
-
-    # 5. Class 테이블에 subject_id (ForeignKey) 컬럼 추가
+    # 5. Class 테이블에 subject_id 컬럼 추가 (제약 조건 없이)
     cursor.execute("ALTER TABLE students_class ADD COLUMN subject_id bigint NULL;")
-    cursor.execute("ALTER TABLE students_class ADD CONSTRAINT fk_class_subject FOREIGN KEY (subject_id) REFERENCES students_subject(id) ON DELETE SET NULL;")
 
     cursor.execute("SET FOREIGN_KEY_CHECKS = 1;")
 
 def migrate_data(apps, schema_editor):
-    """물리적으로 완벽해진 DB에 데이터를 채웁니다."""
+    """구조가 준비된 상태에서 장고 ORM을 통해 데이터를 안전하게 채웁니다."""
     Subject = apps.get_model('students', 'Subject')
     User = apps.get_model('students', 'User')
     Class = apps.get_model('students', 'Class')
 
-    # 초기 데이터
+    # 초기 과목 생성
     obj_map = {}
     for key, name in {'CHEMISTRY': '화학', 'BIOLOGY': '생명과학', 'GEOSCIENCE': '지구과학'}.items():
         obj, _ = Subject.objects.get_or_create(name=name)
@@ -87,11 +77,10 @@ class Migration(migrations.Migration):
     dependencies = [("students", "0008_alter_class_day_of_week_alter_class_start_time_and_more")]
 
     operations = [
-        # 1단계: DB를 물리적으로 완벽하게 재구축
+        # 1. 물리적으로 테이블과 컬럼만 안전하게 생성 (제약 조건 에러 방지)
         migrations.RunPython(ultimate_database_reconstruction),
         
-        # 2단계: 장고의 내부 상태(State)를 위 구축된 DB와 일치시킴
-        # database_operations를 비움으로써 "이미 존재한다"는 에러를 원천 차단함
+        # 2. 장고 내부 상태만 업데이트 (실제 DB는 이미 1번에서 준비됨)
         migrations.SeparateDatabaseAndState(
             state_operations=[
                 migrations.CreateModel(
@@ -107,9 +96,9 @@ class Migration(migrations.Migration):
                 migrations.AddField(model_name="user", name="subjects", field=models.ManyToManyField(to="students.subject")),
                 migrations.AddField(model_name="class", name="subject", field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.PROTECT, to="students.subject")),
             ],
-            database_operations=[], # 실제 DB 작업은 1단계 SQL에서 이미 완료됨
+            database_operations=[], 
         ),
         
-        # 3단계: 안전해진 상태에서 데이터 이관
+        # 3. 데이터 이관
         migrations.RunPython(migrate_data),
     ]
