@@ -44,6 +44,11 @@ class Migration(migrations.Migration):
             ],
             options={"verbose_name": "과목", "verbose_name_plural": "과목"},
         ),
+        # MySQL Collation 에러 해결을 위해 테이블 문자셋 변환
+        migrations.RunSQL(
+            "ALTER TABLE students_subject CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;",
+            reverse_sql="ALTER TABLE students_subject CONVERT TO CHARACTER SET latin1 COLLATE latin1_swedish_ci;"
+        ),
         # 기존 필드 이름 변경 (데이터 보존)
         migrations.RenameField(model_name="user", old_name="subject", new_name="old_subject"),
         migrations.RenameField(model_name="class", old_name="subject", new_name="old_subject"),
