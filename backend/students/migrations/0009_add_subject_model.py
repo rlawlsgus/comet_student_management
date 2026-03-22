@@ -4,18 +4,26 @@ import django.db.models.deletion
 def safe_rename_fields(apps, schema_editor):
     """컬럼 존재 여부를 확인하고 안전하게 이름을 변경합니다."""
     with schema_editor.connection.cursor() as cursor:
-        # students_user 테이블 확인: 'subject' 컬럼이 있으면 'old_subject'로 변경
+        # User 테이블: subject가 있으면 old_subject로 변경
         cursor.execute("SHOW COLUMNS FROM students_user LIKE 'subject'")
-        if cursor.fetchone():
+        subject_exists = cursor.fetchone()
+        cursor.execute("SHOW COLUMNS FROM students_user LIKE 'old_subject'")
+        old_exists = cursor.fetchone()
+        
+        if subject_exists and not old_exists:
             cursor.execute("ALTER TABLE students_user CHANGE subject old_subject varchar(20)")
         
-        # students_class 테이블 확인: 'subject' 컬럼이 있으면 'old_subject'로 변경
+        # Class 테이블: subject가 있으면 old_subject로 변경
         cursor.execute("SHOW COLUMNS FROM students_class LIKE 'subject'")
-        if cursor.fetchone():
+        subject_exists = cursor.fetchone()
+        cursor.execute("SHOW COLUMNS FROM students_class LIKE 'old_subject'")
+        old_exists = cursor.fetchone()
+        
+        if subject_exists and not old_exists:
             cursor.execute("ALTER TABLE students_class CHANGE subject old_subject varchar(20)")
 
 def migrate_data(apps, schema_editor):
-    """old_subject 필드의 텍스트 데이터를 Subject 모델 객체로 이관합니다."""
+    """old_subject 필드의 데이터를 Subject 모델 객체로 이관합니다."""
     Subject = apps.get_model('students', 'Subject')
     User = apps.get_model('students', 'User')
     Class = apps.get_model('students', 'Class')
@@ -50,7 +58,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # 1. 외래 키 체크 비활성화 및 이전 실패 흔적(테이블) 강제 삭제
+        # 1. 외래 키 체크 비활성화 및 이전 실패 흔적 강제 삭제
         migrations.RunSQL("SET FOREIGN_KEY_CHECKS = 0;"),
         migrations.RunSQL("DROP TABLE IF EXISTS students_user_subjects;"),
         migrations.RunSQL("DROP TABLE IF EXISTS students_subject;"),
@@ -66,27 +74,32 @@ class Migration(migrations.Migration):
             options={"verbose_name": "과목", "verbose_name_plural": "과목"},
         ),
         
-        # 3. Collation 변환 (MySQL 한글 정렬 에러 방지)
+        # 3. Collation 변환
         migrations.RunSQL(
             "ALTER TABLE students_subject CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;"
         ),
         
-        # 4. 안전한 필드 이름 변경 (이미 변경된 경우 에러 없이 통과)
-        migrations.RunPython(safe_rename_fields),
-        
-        # 5. 새 관계 필드 추가 (장고 상태 반영용)
-        # RenameField 대신 AddField를 사용하여 이미 바뀐 DB 구조와 장고 모델의 싱크를 맞춥니다.
-        migrations.AddField(
-            model_name="user",
-            name="old_subject",
-            field=models.CharField(max_length=20, null=True, blank=True),
+        # 4. 필드 이름 변경 및 장고 상태 싱크 맞추기
+        # SeparateDatabaseAndState를 사용해 'Duplicate column' 에러를 방지합니다.
+        migrations.SeparateDatabaseAndState(
+            state_operations=[
+                migrations.AddField(
+                    model_name="user",
+                    name="old_subject",
+                    field=models.CharField(max_length=20, null=True, blank=True),
+                ),
+                migrations.AddField(
+                    model_name="class",
+                    name="old_subject",
+                    field=models.CharField(max_length=20, null=True, blank=True),
+                ),
+            ],
+            database_operations=[
+                migrations.RunPython(safe_rename_fields),
+            ],
         ),
-        migrations.AddField(
-            model_name="class",
-            name="old_subject",
-            field=models.CharField(max_length=20, null=True, blank=True),
-        ),
         
+        # 5. 새 관계 필드 추가 (이 필드들은 중복될 일이 없으므로 정상 추가)
         migrations.AddField(
             model_name="user",
             name="subjects",
@@ -104,6 +117,6 @@ class Migration(migrations.Migration):
             ),
         ),
         
-        # 6. 데이터 이관 실행
+        # 6. 데이터 이관
         migrations.RunPython(migrate_data),
     ]
