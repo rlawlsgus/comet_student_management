@@ -13,15 +13,54 @@ from ..models import User, Class, Student, Attendance, Exam, Subject
 from rest_framework import permissions, status, viewsets
 from ..serializers import SubjectSerializer
 
+
 class SubjectViewSet(viewsets.ModelViewSet):
     queryset = Subject.objects.all()
     serializer_class = SubjectSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_permissions(self):
-        if self.action in ["create", "update", "partial_update", "destroy"]:
-            return [permissions.IsAdminUser()]
-        return super().get_permissions()
+    def create(self, request, *args, **kwargs):
+        if request.user.role != User.Role.ADMIN and not request.user.is_superuser:
+            return Response(
+                {"detail": "관리자만 과목을 생성할 수 있습니다."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        if request.user.role != User.Role.ADMIN and not request.user.is_superuser:
+            return Response(
+                {"detail": "관리자만 과목을 수정할 수 있습니다."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        if request.user.role != User.Role.ADMIN and not request.user.is_superuser:
+            return Response(
+                {"detail": "관리자만 과목을 수정할 수 있습니다."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return super().partial_update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        if request.user.role != User.Role.ADMIN and not request.user.is_superuser:
+            return Response(
+                {"detail": "관리자만 과목을 삭제할 수 있습니다."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        instance = self.get_object()
+        if instance.class_set.exists():
+            return Response(
+                {
+                    "detail": "해당 과목으로 등록된 반이 존재하여 삭제할 수 없습니다. 반을 먼저 삭제하거나 변경해주세요."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return super().destroy(request, *args, **kwargs)
+
 
 class DashboardView(APIView):
     """
@@ -70,6 +109,7 @@ class DashboardView(APIView):
         classes = Class.objects.all()
         if user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
             from django.db.models import Q
+
             return classes.filter(Q(subject__in=user.subjects.all()) | Q(name="퇴원"))
         return classes
 
@@ -194,14 +234,20 @@ class AlimtalkService:
         # 실패 건 재시도
         if temp_failed_indices:
             retry_items = [
-                {"idx": idx, "payload": self._build_payload(bulk_data[idx]), "data": bulk_data[idx]}
+                {
+                    "idx": idx,
+                    "payload": self._build_payload(bulk_data[idx]),
+                    "data": bulk_data[idx],
+                }
                 for idx in temp_failed_indices
             ]
-            
+
             final_failed_indices = []
             for i in range(0, len(retry_items), 100):
-                success_count += self._post_chunk(retry_items[i : i + 100], final_failed_indices)
-            
+                success_count += self._post_chunk(
+                    retry_items[i : i + 100], final_failed_indices
+                )
+
             # 최종 실패 항목 정리
             for idx in final_failed_indices:
                 failed_items.append(bulk_data[idx])
@@ -323,8 +369,10 @@ class KakaoNotificationView(APIView):
         # 권한 체크
         if request.user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
             if attendance.class_info:
-                if not request.user.subjects.filter(id=attendance.class_info.subject_id).exists():
-                     return Response({"detail": "권한이 없습니다."}, status=403)
+                if not request.user.subjects.filter(
+                    id=attendance.class_info.subject_id
+                ).exists():
+                    return Response({"detail": "권한이 없습니다."}, status=403)
             elif attendance.class_info and attendance.class_info.name != "퇴원":
                 return Response({"detail": "권한이 없습니다."}, status=403)
 
@@ -342,8 +390,10 @@ class KakaoNotificationView(APIView):
         students = Student.objects.filter(id__in=student_ids)
         if request.user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
             from django.db.models import Q
+
             students = students.filter(
-                Q(classes__subject__in=request.user.subjects.all()) | Q(classes__name="퇴원")
+                Q(classes__subject__in=request.user.subjects.all())
+                | Q(classes__name="퇴원")
             ).distinct()
 
         bulk_data = []
@@ -352,15 +402,21 @@ class KakaoNotificationView(APIView):
             att = Attendance.objects.filter(student=st, date=target_date).first()
             # 만약 여러 반에 속해있다면, 선생님이 권한을 가진 반의 기록만 가져오도록 필터링 추가 필요할 수 있음
             if att and request.user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
-                if att.class_info and not request.user.subjects.filter(id=att.class_info.subject_id).exists() and att.class_info.name != "퇴원":
+                if (
+                    att.class_info
+                    and not request.user.subjects.filter(
+                        id=att.class_info.subject_id
+                    ).exists()
+                    and att.class_info.name != "퇴원"
+                ):
                     continue
-            
+
             if att:
                 bulk_data.append(self._prepare_notification_data(st, att))
 
         if not bulk_data:
             return Response({"detail": "전송할 출석 기록이 없습니다."}, status=400)
-        
+
         if request.data.get("preview"):
             return Response(bulk_data)
 
@@ -376,7 +432,7 @@ class KakaoNotificationView(APIView):
 
     def _prepare_notification_data(self, student, attendance):
         related_exams = Exam.objects.filter(attendance=attendance)
-        
+
         # 반 평균 및 최고점 계산
         stats = []
         if attendance.class_info:
