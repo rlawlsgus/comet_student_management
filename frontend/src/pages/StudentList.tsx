@@ -468,8 +468,12 @@ const StudentList: React.FC = () => {
               <TableCell sx={{ whiteSpace: 'nowrap' }}>이름</TableCell>
               <TableCell>수강 반</TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>학교</TableCell>
-              <TableCell sx={{ whiteSpace: 'nowrap' }}>부모님 전화번호</TableCell>
-              <TableCell sx={{ whiteSpace: 'nowrap' }}>학생 전화번호</TableCell>
+              {user?.role !== 'ASSISTANT' && (
+                <>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>부모님 전화번호</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>학생 전화번호</TableCell>
+                </>
+              )}
               <TableCell sx={{ whiteSpace: 'nowrap' }}>출석률</TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>평균 점수</TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>관리</TableCell>
@@ -487,8 +491,12 @@ const StudentList: React.FC = () => {
                   })}
                 </TableCell>
                 <TableCell sx={{ whiteSpace: 'nowrap' }}>{student.school || '-'}</TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>{student.parent_phone}</TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>{student.student_phone || '-'}</TableCell>
+                {user?.role !== 'ASSISTANT' && (
+                  <>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{student.parent_phone}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{student.student_phone || '-'}</TableCell>
+                  </>
+                )}
                 <TableCell sx={{ whiteSpace: 'nowrap' }}>
                   {student.attendance_stats.total_classes > 0 
                     ? `${Math.round((student.attendance_stats.attended_classes / student.attendance_stats.total_classes) * 100)}%`

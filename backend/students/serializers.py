@@ -325,15 +325,25 @@ class StudentSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         user = request.user if request else None
 
-        if user and user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
-            class_ids = ret.get("classes", [])
-            from django.db.models import Q
-            filtered_class_ids = list(
-                Class.objects.filter(
-                    Q(id__in=class_ids) & (Q(subject__in=user.subjects.all()) | Q(name="퇴원"))
-                ).values_list("id", flat=True)
-            )
-            ret["classes"] = filtered_class_ids
+        if user:
+            # 조교(ASSISTANT)인 경우 전화번호 마스킹 처리 (개인정보 보호)
+            if user.role == User.Role.ASSISTANT:
+                mask = "010-****-****"
+                if "parent_phone" in ret:
+                    ret["parent_phone"] = mask
+                if "student_phone" in ret and ret["student_phone"]:
+                    ret["student_phone"] = mask
+
+            # 선생님이나 조교인 경우 접근 가능한 반만 필터링
+            if user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
+                class_ids = ret.get("classes", [])
+                from django.db.models import Q
+                filtered_class_ids = list(
+                    Class.objects.filter(
+                        Q(id__in=class_ids) & (Q(subject__in=user.subjects.all()) | Q(name="퇴원"))
+                    ).values_list("id", flat=True)
+                )
+                ret["classes"] = filtered_class_ids
         return ret
 
     def validate_name(self, value):
@@ -560,11 +570,23 @@ class StudentDetailSerializer(StudentSerializer):
         request = self.context.get("request")
         user = request.user if request else None
 
-        # Filter the classes queryset based on the user's role
-        classes_queryset = instance.classes.all()
-        if user and user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
-            from django.db.models import Q
-            classes_queryset = classes_queryset.filter(Q(subject__in=user.subjects.all()) | Q(name="퇴원"))
+        if user:
+            # 조교(ASSISTANT)인 경우 전화번호 마스킹 처리 (개인정보 보호)
+            if user.role == User.Role.ASSISTANT:
+                mask = "010-****-****"
+                if "parent_phone" in ret:
+                    ret["parent_phone"] = mask
+                if "student_phone" in ret and ret["student_phone"]:
+                    ret["student_phone"] = mask
+
+            # 선생님이나 조교인 경우 접근 가능한 반만 필터링
+            if user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
+                from django.db.models import Q
+                classes_queryset = instance.classes.filter(Q(subject__in=user.subjects.all()) | Q(name="퇴원"))
+            else:
+                classes_queryset = instance.classes.all()
+        else:
+            classes_queryset = instance.classes.all()
 
         # Serialize the filtered classes and assign to the 'classes' field
         ret["classes"] = ClassForStudentDetailSerializer(
