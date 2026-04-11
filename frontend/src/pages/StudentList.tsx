@@ -101,9 +101,12 @@ const StudentList: React.FC = () => {
     severity: 'success',
   });
 
-  const [filters, setFilters] = useState({
-    subject: '',
-    classId: '',
+  const [filters, setFilters] = useState(() => {
+    const savedFilters = sessionStorage.getItem('studentListFilters');
+    return savedFilters ? JSON.parse(savedFilters) : {
+      subject: '',
+      classId: '',
+    };
   });
 
   const [newAttendance, setNewAttendance] = useState({
@@ -128,6 +131,10 @@ const StudentList: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    sessionStorage.setItem('studentListFilters', JSON.stringify(filters));
+  }, [filters]);
 
   const fetchData = async () => {
     try {

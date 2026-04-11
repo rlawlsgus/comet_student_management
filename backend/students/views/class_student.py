@@ -183,10 +183,11 @@ class StudentViewSet(viewsets.ModelViewSet):
         user = self.request.user
 
         if user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
-            # 사용자의 과목에 속한 반의 학생이거나, 반이 없거나, "퇴원" 반(subject=None)에 속한 학생
+            # 사용자의 과목에 속한 반의 학생이거나, "퇴원" 반 학생이거나, 반이 없는 학생
+            user_subjects = user.subjects.all()
             queryset = queryset.filter(
-                Q(classes__subject__in=user.subjects.all()) | 
-                Q(classes__subject__isnull=True) |
+                Q(classes__subject__in=user_subjects) | 
+                Q(classes__name="퇴원") |
                 Q(classes__isnull=True)
             ).distinct()
 
@@ -241,10 +242,11 @@ class StudentViewSet(viewsets.ModelViewSet):
 
         if request.user.role == User.Role.TEACHER:
             instance = self.get_object()
+            user_subjects = request.user.subjects.all()
             is_assigned = instance.classes.exists()
             # 반이 없거나, 자신의 과목 반에 속해있거나, "퇴원" 반에 속해있으면 삭제 가능
             can_delete = not is_assigned or instance.classes.filter(
-                Q(subject__in=request.user.subjects.all()) | Q(name="퇴원")
+                Q(subject__in=user_subjects) | Q(name="퇴원")
             ).exists()
             if not can_delete:
                 return Response(
@@ -283,14 +285,15 @@ class StudentViewSet(viewsets.ModelViewSet):
         
         attendances = student.attendance_set.all().order_by("-date")
         if user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
-            # 자신의 과목 반 학생이거나 "퇴원" 반 학생인 경우 접근 허용
-            if not student.classes.filter(Q(subject__in=user.subjects.all()) | Q(name="퇴원")).exists():
+            user_subjects = user.subjects.all()
+            # 자신의 과목 반 학생이거나 "퇴원" 반 학생이거나 반이 없는 경우 접근 허용
+            if not student.classes.filter(Q(subject__in=user_subjects) | Q(name="퇴원")).exists() and student.classes.exists():
                 return Response(
                     {"detail": "해당 학생의 출석 기록에 접근할 권한이 없습니다."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
             # 출석 기록 필터링: 자신의 과목 또는 "퇴원" 반 기록
-            attendances = attendances.filter(Q(class_info__subject__in=user.subjects.all()) | Q(class_info__name="퇴원"))
+            attendances = attendances.filter(Q(class_info__subject__in=user_subjects) | Q(class_info__name="퇴원"))
 
         serializer = AttendanceSerializer(attendances, many=True)
         return Response(serializer.data)
@@ -304,13 +307,14 @@ class StudentViewSet(viewsets.ModelViewSet):
             "-attendance__date"
         )
         if user.role in [User.Role.TEACHER, User.Role.ASSISTANT]:
-            if not student.classes.filter(Q(subject__in=user.subjects.all()) | Q(name="퇴원")).exists():
+            user_subjects = user.subjects.all()
+            if not student.classes.filter(Q(subject__in=user_subjects) | Q(name="퇴원")).exists() and student.classes.exists():
                 return Response(
                     {"detail": "해당 학생의 시험 기록에 접근할 권한이 없습니다."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
             # 시험 기록 필터링: 자신의 과목 또는 "퇴원" 반 기록
-            exams = exams.filter(Q(attendance__class_info__subject__in=user.subjects.all()) | Q(attendance__class_info__name="퇴원"))
+            exams = exams.filter(Q(attendance__class_info__subject__in=user_subjects) | Q(attendance__class_info__name="퇴원"))
 
         serializer = ExamSerializer(exams, many=True)
         return Response(serializer.data)

@@ -406,7 +406,18 @@ const StudentManagement: React.FC = () => {
   }
 
   if (!student) {
-    return <Typography>학생을 찾을 수 없습니다.</Typography>;
+    return (
+      <Container maxWidth="lg" sx={{ mt: 4 }}>
+        {error ? (
+          <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
+        ) : (
+          <Typography>학생을 찾을 수 없습니다.</Typography>
+        )}
+        <Button variant="outlined" onClick={() => navigate('/students')}>
+          목록으로 돌아가기
+        </Button>
+      </Container>
+    );
   }
 
   return (

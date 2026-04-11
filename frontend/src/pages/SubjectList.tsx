@@ -189,7 +189,7 @@ const SubjectList: React.FC = () => {
             <TableRow>
               <TableCell sx={{ width: '70px' }}>ID</TableCell>
               <TableCell sx={{ width: '200px' }}>과목명</TableCell>
-              <TableCell /> {/* 공간을 채워주는 빈 컬럼 */}
+              <TableCell />
               {isAdmin && <TableCell sx={{ width: '100px' }}>관리</TableCell>}
             </TableRow>
           </TableHead>
@@ -198,7 +198,7 @@ const SubjectList: React.FC = () => {
               <TableRow key={subject.id}>
                 <TableCell>{subject.id}</TableCell>
                 <TableCell>{subject.name}</TableCell>
-                <TableCell /> {/* 공간을 채워주는 빈 컬럼 */}
+                <TableCell />
                 {isAdmin && (
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 0.5 }}>
