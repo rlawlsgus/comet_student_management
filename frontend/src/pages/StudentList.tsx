@@ -78,6 +78,11 @@ interface Class {
   subject_detail?: { id: number; name: string };
 }
 
+interface StudentListFilters {
+  subject: string;
+  classId: string;
+}
+
 const StudentList: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -101,7 +106,7 @@ const StudentList: React.FC = () => {
     severity: 'success',
   });
 
-  const [filters, setFilters] = useState(() => {
+  const [filters, setFilters] = useState<StudentListFilters>(() => {
     const savedFilters = sessionStorage.getItem('studentListFilters');
     return savedFilters ? JSON.parse(savedFilters) : {
       subject: '',
@@ -155,7 +160,7 @@ const StudentList: React.FC = () => {
 
   const handleFilterChange = (e: SelectChangeEvent) => {
     const { name, value } = e.target;
-    setFilters(prev => ({
+    setFilters((prev: StudentListFilters) => ({
       ...prev,
       [name]: value,
     }));
