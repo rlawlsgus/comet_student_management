@@ -161,8 +161,8 @@ class Exam(models.Model):
         default=Category.REVIEW,
         verbose_name="시험종류",
     )
-    score = models.PositiveIntegerField(null=True, blank=True, verbose_name="점수")
-    max_score = models.PositiveIntegerField(null=True, blank=True, verbose_name="만점")
+    score = models.FloatField(null=True, blank=True, verbose_name="점수")
+    max_score = models.FloatField(null=True, blank=True, verbose_name="만점")
     grade = models.CharField(
         max_length=2, choices=Grade.choices, null=True, blank=True, verbose_name="등급"
     )

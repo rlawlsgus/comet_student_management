@@ -81,6 +81,7 @@ interface Class {
 interface StudentListFilters {
   subject: string;
   classId: string;
+  name: string;
 }
 
 const StudentList: React.FC = () => {
@@ -111,6 +112,7 @@ const StudentList: React.FC = () => {
     return savedFilters ? JSON.parse(savedFilters) : {
       subject: '',
       classId: '',
+      name: '',
     };
   });
 
@@ -124,6 +126,7 @@ const StudentList: React.FC = () => {
     class_info: null as number | null,
   });
 
+  const [scoreInput, setScoreInput] = useState<string>('0');
   const [newExam, setNewExam] = useState({
     name: '',
     category: 'REVIEW',
@@ -158,7 +161,7 @@ const StudentList: React.FC = () => {
     }
   };
 
-  const handleFilterChange = (e: SelectChangeEvent) => {
+  const handleFilterChange = (e: SelectChangeEvent | React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFilters((prev: StudentListFilters) => ({
       ...prev,
@@ -166,7 +169,39 @@ const StudentList: React.FC = () => {
     }));
   };
 
+  const calculateScore = (input: string, maxScore: number): number => {
+    try {
+      // 숫자, +, -, . 이외의 문자 제거 (1차 방어)
+      const sanitized = input.replace(/[^0-9+\-.]/g, '');
+      if (!sanitized) return 0;
+      
+      // 정규표현식을 이용해 숫자와 부호를 분리하여 안전하게 계산 (eval 대체)
+      const tokens = sanitized.match(/[+\-]?[0-9.]+/g);
+      if (!tokens) return 0;
+      
+      const result = tokens.reduce((acc, token) => acc + parseFloat(token), 0);
+      
+      if (isNaN(result)) return 0;
+      
+      // 부동소수점 오차 해결을 위해 소수점 둘째 자리까지 반올림
+      const roundedResult = Math.round(result * 100) / 100;
+      
+      if (roundedResult < 0) {
+        // 결과가 음수면 만점에서 차감
+        return Math.max(0, Math.round((maxScore + roundedResult) * 100) / 100);
+      }
+      // 결과가 양수면 그대로 반환 (만점 초과 방지)
+      return Math.min(maxScore, roundedResult);
+    } catch (e) {
+      return 0;
+    }
+  };
+
   const filteredStudents = students.filter(student => {
+    if (filters.name && !student.name.toLowerCase().includes(filters.name.toLowerCase())) {
+      return false;
+    }
+
     if (filters.subject) {
       const targetSubjectId = Number(filters.subject);
       const studentClassSubjects = student.classes.map(classId => {
@@ -251,7 +286,10 @@ const StudentList: React.FC = () => {
   const handleExamSubmit = async () => {
     if (!selectedStudent) return;
 
-    const { category, name, score, max_score, grade, attendance } = newExam;
+    const { category, name, max_score, grade, attendance } = newExam;
+    const score = (category === 'REVIEW' || category === 'SCHOOL' || category === 'MOCK') 
+      ? calculateScore(scoreInput, category === 'MOCK' ? 50 : max_score)
+      : 0;
 
     if (!name) {
       setError('시험 이름을 입력해주세요.');
@@ -296,6 +334,7 @@ const StudentList: React.FC = () => {
         grade: 'A',
         attendance: null,
       });
+      setScoreInput('0');
     } catch (error: any) {
       const errText = error.response?.data?.detail || error.message || '시험 기록 추가 중 오류가 발생했습니다.';
       setError(errText);
@@ -318,6 +357,7 @@ const StudentList: React.FC = () => {
         grade: 'A',
         attendance: attendances.length > 0 ? attendances[0].id : null,
       });
+      setScoreInput('0');
 
       setOpenExamDialog(true);
     } catch (error: any) {
@@ -449,26 +489,37 @@ const StudentList: React.FC = () => {
       </Box>
 
       <Paper sx={{ p: 2, mb: 3 }}>
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <FormControl fullWidth>
-            <InputLabel>과목</InputLabel>
-            <Select name="subject" value={filters.subject} onChange={handleFilterChange} label="과목">
-              <MenuItem value="">전체</MenuItem>
-              {subjects.map(s => (
-                <MenuItem key={s.id} value={s.id.toString()}>{s.name}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <FormControl fullWidth>
-            <InputLabel>반</InputLabel>
-            <Select name="classId" value={filters.classId} onChange={handleFilterChange} label="반">
-              <MenuItem value="">전체</MenuItem>
-              <MenuItem value="UNASSIGNED">반 미배정</MenuItem>
-              {filteredClasses.map((classItem) => (
-                <MenuItem key={classItem.id} value={classItem.id}>{classItem.name}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <FormControl fullWidth>
+              <InputLabel>과목</InputLabel>
+              <Select name="subject" value={filters.subject} onChange={handleFilterChange} label="과목">
+                <MenuItem value="">전체</MenuItem>
+                {subjects.map(s => (
+                  <MenuItem key={s.id} value={s.id.toString()}>{s.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth>
+              <InputLabel>반</InputLabel>
+              <Select name="classId" value={filters.classId} onChange={handleFilterChange} label="반">
+                <MenuItem value="">전체</MenuItem>
+                <MenuItem value="UNASSIGNED">반 미배정</MenuItem>
+                {filteredClasses.map((classItem) => (
+                  <MenuItem key={classItem.id} value={classItem.id}>{classItem.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+          <TextField
+            fullWidth
+            label="학생 이름 검색"
+            name="name"
+            value={filters.name}
+            onChange={handleFilterChange}
+            placeholder="학생 이름을 입력하세요"
+            variant="outlined"
+          />
         </Box>
       </Paper>
 
@@ -636,22 +687,22 @@ const StudentList: React.FC = () => {
                     setNewExam({ ...newExam, max_score: value });
                   }
                 }}
-                inputProps={{ min: 1 }}
+                inputProps={{ min: 1, step: 'any' }}
                 sx={{ mb: 2 }}
               />
               <TextField
                 fullWidth
-                type="number"
                 label="점수"
-                value={newExam.score}
-                onChange={(e) => {
-                  const value = Number(e.target.value);
-                  if (value >= 0 && value <= newExam.max_score) {
-                    setNewExam({ ...newExam, score: value });
+                value={scoreInput}
+                onChange={(e) => setScoreInput(e.target.value)}
+                onBlur={() => setScoreInput(calculateScore(scoreInput, newExam.max_score).toString())}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    setScoreInput(calculateScore(scoreInput, newExam.max_score).toString());
                   }
                 }}
-                inputProps={{ min: 0, max: newExam.max_score }}
-                sx={{ mb: 2 }}
+                sx={{ mb: 1 }}
+                helperText="수식 입력 가능 (예: 80+5, 100-10, -5). 음수 입력 시 만점에서 차감됩니다."
               />
             </>
           )}
@@ -668,17 +719,17 @@ const StudentList: React.FC = () => {
               />
               <TextField
                 fullWidth
-                type="number"
                 label="점수"
-                value={newExam.score}
-                onChange={(e) => {
-                  const value = Number(e.target.value);
-                  if (value >= 0 && value <= 50) {
-                    setNewExam({ ...newExam, score: value });
+                value={scoreInput}
+                onChange={(e) => setScoreInput(e.target.value)}
+                onBlur={() => setScoreInput(calculateScore(scoreInput, 50).toString())}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    setScoreInput(calculateScore(scoreInput, 50).toString());
                   }
                 }}
-                inputProps={{ min: 0, max: 50 }}
-                sx={{ mb: 2 }}
+                sx={{ mb: 1 }}
+                helperText="수식 입력 가능 (예: 40+5, 50-10, -5). 음수 입력 시 만점에서 차감됩니다."
               />
             </>
           )}
